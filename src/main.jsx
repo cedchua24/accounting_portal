@@ -1,16 +1,34 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, BadgeDollarSign,
   Banknote, Bell, BookOpen, Building2, CalendarDays, Check, ChevronDown,
-  ChevronRight, CircleHelp, CreditCard, Download, FileBarChart, Landmark,
+  ChevronRight, CircleHelp, CreditCard, Download, Eye, EyeOff, FileBarChart, Landmark,
   LayoutDashboard, Menu, MoreHorizontal, Plus, ReceiptText, RefreshCw,
-  Search, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Users,
+  LockKeyhole, LogOut, Mail, Search, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Users,
   WalletCards, X, Zap
 } from 'lucide-react';
 import './styles.css';
+import { accountingApi, authApi } from './api.js';
 
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 });
+
+const pagePaths = {
+  dashboard: '/',
+  accounts: '/financial-accounts',
+  payments: '/payments',
+  reconciliation: '/reconciliation',
+  transfers: '/transfers',
+  'credit-cards': '/credit-cards',
+  ledger: '/general-ledger',
+  reports: '/reports',
+  interbranch: '/interbranch',
+};
+
+function pageFromPath(pathname) {
+  if (pathname === '/financial-accounts' || pathname.startsWith('/financial-accounts/')) return 'accounts';
+  return Object.entries(pagePaths).find(([, path]) => path === pathname)?.[0] || 'dashboard';
+}
 
 const navGroups = [
   { label: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -55,7 +73,7 @@ function Logo() {
   return <div className="logo"><span className="logo-mark"><span /><span /><span /></span><span>Ledgerly</span></div>;
 }
 
-function Sidebar({ active, setActive, open, close }) {
+function Sidebar({ active, setActive, open, close, user, onLogout }) {
   return <>
     {open && <button className="scrim" onClick={close} aria-label="Close navigation" />}
     <aside className={`sidebar ${open ? 'open' : ''}`}>
@@ -76,7 +94,8 @@ function Sidebar({ active, setActive, open, close }) {
       <div className="sidebar-footer">
         <button><CircleHelp size={18}/><span>Help center</span></button>
         <button><Settings size={18}/><span>Settings</span></button>
-        <div className="user-card"><div className="avatar">CC</div><div><strong>Ced Chua</strong><span>Administrator</span></div><MoreHorizontal size={18}/></div>
+        <button onClick={onLogout}><LogOut size={18}/><span>Sign out</span></button>
+        <div className="user-card"><div className="avatar">{(user?.name || user?.username || 'User').split(/\s+/).map(part => part[0]).join('').slice(0,2).toUpperCase()}</div><div><strong>{user?.name || user?.username || 'Accounting user'}</strong><span>{String(user?.role || 'viewer').replaceAll('_', ' ')}</span></div><MoreHorizontal size={18}/></div>
       </div>
     </aside>
   </>;
@@ -175,18 +194,85 @@ function PaymentsPage({ title = 'Payments' }) {
   </main>;
 }
 
-function AccountsPage() {
-  const [selected, setSelected] = useState(accountData[0]);
+function normalizeAccount(account) {
+  const rawType = account.type || account.account_type || account.category || 'Account';
+  const type = String(rawType).replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+  const name = account.name || account.account_name || account.display_name || `Account ${account.id}`;
+  const isCredit = String(rawType).toLowerCase().includes('credit');
+  return {
+    ...account,
+    id: account.id,
+    name,
+    type,
+    isCredit,
+    balance: Number(account.current_balance ?? account.balance ?? 0),
+    creditLimit: account.credit_limit == null ? null : Number(account.credit_limit),
+    outstandingBalance: account.outstanding_balance == null ? null : Number(account.outstanding_balance),
+    availableCredit: account.available_credit == null ? null : Number(account.available_credit),
+    mask: account.masked_number || account.account_number_masked || account.mask || account.reference || 'Account details',
+    initials: (account.initials || name.split(/\s+/).map(part => part[0]).join('').slice(0, 2)).toUpperCase(),
+    color: account.color || (isCredit ? '#872f42' : '#234a3b'),
+  };
+}
+
+function AccountsPage({ requestedAccountId, onSelectAccount }) {
+  const [accounts, setAccounts] = useState([]);
+  const [selectedId, setSelectedId] = useState(() => {
+    return requestedAccountId;
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [authVersion, setAuthVersion] = useState(0);
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setError(null);
+    accountingApi.financialAccounts()
+      .then(response => {
+        if (!current) return;
+        const records = Array.isArray(response) ? response : response?.data || response?.accounts || [];
+        const normalized = records.map(normalizeAccount);
+        setAccounts(normalized);
+        setSelectedId(previous => normalized.find(account => String(account.id) === String(previous))?.id ?? normalized[0]?.id ?? null);
+      })
+      .catch(requestError => current && setError(requestError))
+      .finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, [authVersion]);
+
+  useEffect(() => {
+    if (requestedAccountId != null && accounts.some(account => String(account.id) === String(requestedAccountId))) {
+      setSelectedId(requestedAccountId);
+    }
+  }, [requestedAccountId, accounts]);
+
+  const selected = accounts.find(account => String(account.id) === String(selectedId)) || accounts[0];
+  const savingsTotal = accounts.filter(account => !account.isCredit).reduce((sum, account) => sum + account.balance, 0);
+  const creditLimitTotal = accounts.filter(account => account.isCredit).reduce((sum, account) => sum + (account.creditLimit || 0), 0);
+  const selectAccount = account => {
+    setSelectedId(account.id);
+    onSelectAccount(account.id);
+  };
+
   return <main className="content inner-page">
     <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Financial accounts</h1><p>One source of truth for bank, cash, e-wallet, and credit accounts.</p></div><button className="secondary-button"><Plus size={17}/>Add account</button></div>
-    <section className="account-page-grid">
-      <div className="account-cards">{accountData.map(a => <button key={a.id} className={`big-account-card ${selected.id === a.id ? 'selected' : ''}`} onClick={() => setSelected(a)}><span className="account-logo large" style={{background:a.color}}>{a.initials}</span><span><small>{a.type}</small><strong>{a.name}</strong><em>{a.mask}</em></span><strong className={a.balance < 0 ? 'red' : ''}>{peso.format(a.balance)}</strong><ChevronRight size={18}/></button>)}</div>
+    {!loading && !error && accounts.length > 0 && <section className="account-summary">
+      <div><span>Current savings</span><strong>{peso.format(savingsTotal)}</strong><small>Across {accounts.filter(account => !account.isCredit).length} cash accounts</small></div>
+      <div><span>Total credit limit</span><strong>{peso.format(creditLimitTotal)}</strong><small>Across {accounts.filter(account => account.isCredit).length} credit accounts</small></div>
+    </section>}
+    {loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading financial accounts…</h2><p>Fetching your latest posted balances.</p></section>}
+    {!loading && error && <section className="panel account-state error-state"><CircleHelp size={24}/><h2>Financial accounts could not be loaded</h2><p>{error.status === 401 ? 'Your accounting API session is not authorized. Please ask an administrator to check the shared authentication setup.' : error.message || 'Could not load financial accounts.'}</p><button className="secondary-button" onClick={() => setAuthVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section>}
+    {!loading && !error && accounts.length === 0 && <section className="panel account-state"><Landmark size={24}/><h2>No financial accounts yet</h2><p>Add an account to start tracking current balances and credit limits.</p></section>}
+    {!loading && !error && selected && <section className="account-page-grid">
+      <div className="account-cards">{accounts.map(a => <button key={a.id} className={`big-account-card ${selected.id === a.id ? 'selected' : ''}`} onClick={() => selectAccount(a)}><span className="account-logo large" style={{background:a.color}}>{a.initials}</span><span><small>{a.type}</small><strong>{a.name}</strong><em>{a.mask}</em></span><span className="card-balance"><small>{a.isCredit ? 'Available credit' : 'Current balance'}</small><strong className={!a.isCredit && a.balance < 0 ? 'red' : ''}>{peso.format(a.isCredit ? (a.availableCredit ?? 0) : a.balance)}</strong>{a.isCredit && a.creditLimit != null && <em>Limit {peso.format(a.creditLimit)}</em>}</span><ChevronRight size={18}/></button>)}</div>
       <article className="panel account-detail"><div className="account-detail-head"><div><span className="account-logo large" style={{background:selected.color}}>{selected.initials}</span><div><small>{selected.type}</small><h2>{selected.name}</h2><p>{selected.mask}</p></div></div><button className="icon-button"><MoreHorizontal size={19}/></button></div>
-        <div className="balance-block"><span>Available balance</span><strong className={selected.balance < 0 ? 'red' : ''}>{peso.format(selected.balance)}</strong><p><span className={selected.trend > 0 ? 'positive' : 'negative'}>{selected.trend > 0 ? '+' : ''}{selected.trend}%</span> in the last 30 days</p></div>
+        <div className="balance-block"><span>{selected.isCredit ? 'Available credit' : 'Current balance'}</span><strong className={!selected.isCredit && selected.balance < 0 ? 'red' : ''}>{peso.format(selected.isCredit ? (selected.availableCredit ?? 0) : selected.balance)}</strong><p>Calculated from posted journal entries</p></div>
+        {selected.isCredit && <div className="credit-breakdown"><div><span>Credit limit</span><strong>{peso.format(selected.creditLimit ?? 0)}</strong></div><div><span>Outstanding balance</span><strong className="red">{peso.format(selected.outstandingBalance ?? 0)}</strong></div></div>}
         <div className="detail-meta"><div><span>Access</span><strong><Users size={15}/>Company-wide</strong></div><div><span>Owner</span><strong><Store size={15}/>Main office</strong></div><div><span>Status</span><strong><ShieldCheck size={15}/>Active</strong></div></div>
         <button className="primary-button wide"><BookOpen size={17}/>Open passbook</button>
       </article>
-    </section>
+    </section>}
   </main>;
 }
 
@@ -208,18 +294,150 @@ function NewTransactionModal({ close }) {
   ].map(([label, Icon, desc]) => <button key={label} className={choice===label?'selected':''} onClick={()=>setChoice(label)}><span><Icon size={19}/></span><div><strong>{label}</strong><small>{desc}</small></div>{choice===label && <Check size={17}/>}</button>)}</div><div className="modal-actions"><button className="text-button" onClick={close}>Cancel</button><button className="primary-button" onClick={()=>setSaved(true)}>Continue<ChevronRight size={17}/></button></div></div></div>;
 }
 
+function LoginPage({ mode, onModeChange, onAuthenticated }) {
+  const isRegister = mode === 'register';
+  const [login, setLogin] = useState('');
+  const [form, setForm] = useState({ name: '', username: '', email: '', first_name: '', last_name: '', phone: '', password: '', password_confirmation: '' });
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async event => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = isRegister
+        ? await authApi.register({
+            name: form.name.trim(),
+            username: form.username.trim(),
+            email: form.email.trim(),
+            password: form.password,
+            password_confirmation: form.password_confirmation,
+            profile: {
+              first_name: form.first_name.trim() || null,
+              last_name: form.last_name.trim() || null,
+              phone: form.phone.trim() || null,
+              country: 'PH',
+            },
+          })
+        : await authApi.login(login.trim(), password);
+      if (!response?.token) throw new Error('The server did not return an access token.');
+      const user = response.user;
+      if (!user) throw new Error('The server did not return the user profile.');
+      sessionStorage.setItem('accounting_token', response.token);
+      sessionStorage.setItem('accounting_user', JSON.stringify(user));
+      onAuthenticated(user);
+    } catch (requestError) {
+      const validationMessage = requestError.details && Object.values(requestError.details).flat()[0];
+      setError(validationMessage || requestError.message || 'Unable to sign in.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <main className="login-page">
+    <section className="login-story">
+      <div className="login-brand"><Logo/><span>ACCOUNTING PORTAL</span></div>
+      <div className="story-copy"><span className="story-kicker"><span/>One view across every branch</span><h1>Clarity for every<br/>peso that moves.</h1><p>Track collections, payments, account balances, and journal activity from one secure workspace.</p></div>
+      <div className="story-proof"><div><ShieldCheck size={18}/><span><strong>Audit-ready</strong><small>Posted records stay traceable</small></span></div><div><Building2 size={18}/><span><strong>Multi-branch</strong><small>Centralized company view</small></span></div><div><Activity size={18}/><span><strong>Live balances</strong><small>Calculated from journal lines</small></span></div></div>
+      <div className="login-orbit orbit-one"/><div className="login-orbit orbit-two"/><div className="login-glow"/>
+    </section>
+    <section className="login-panel">
+      <div className="login-card">
+        <div className="login-mobile-brand"><Logo/></div>
+        <div className="auth-tabs"><button className={!isRegister ? 'active' : ''} onClick={() => onModeChange('login')}>Sign in</button><button className={isRegister ? 'active' : ''} onClick={() => onModeChange('register')}>Create account</button></div>
+        <div className="login-heading"><span className="secure-label"><LockKeyhole size={13}/>{isRegister ? 'NEW ACCOUNT' : 'SECURE ACCESS'}</span><h2>{isRegister ? 'Join the workspace' : 'Welcome back'}</h2><p>{isRegister ? 'Create your Accounting Portal profile. New accounts begin with viewer access.' : 'Sign in with your accounting username or email.'}</p></div>
+        <form className="portal-login-form" onSubmit={submit}>
+          {isRegister ? <>
+            <label>Display name<div className="login-input"><Users size={17}/><input value={form.name} onChange={event => setForm(value => ({...value, name:event.target.value}))} placeholder="Juan Dela Cruz" autoComplete="name" required autoFocus/></div></label>
+            <div className="registration-grid"><label>First name<div className="login-input"><input value={form.first_name} onChange={event => setForm(value => ({...value, first_name:event.target.value}))} placeholder="Juan" autoComplete="given-name"/></div></label><label>Last name<div className="login-input"><input value={form.last_name} onChange={event => setForm(value => ({...value, last_name:event.target.value}))} placeholder="Dela Cruz" autoComplete="family-name"/></div></label></div>
+            <label>Username<div className="login-input"><span className="input-symbol">@</span><input value={form.username} onChange={event => setForm(value => ({...value, username:event.target.value}))} placeholder="juan.cruz" autoComplete="username" minLength="3" required/></div></label>
+            <label>Email address<div className="login-input"><Mail size={17}/><input type="email" value={form.email} onChange={event => setForm(value => ({...value, email:event.target.value}))} placeholder="juan@example.com" autoComplete="email" required/></div></label>
+            <label>Phone <small className="optional-label">Optional</small><div className="login-input"><span className="input-symbol">+63</span><input value={form.phone} onChange={event => setForm(value => ({...value, phone:event.target.value}))} placeholder="917 123 4567" autoComplete="tel"/></div></label>
+            <label>Password<div className="login-input"><LockKeyhole size={17}/><input type={showPassword ? 'text' : 'password'} value={form.password} onChange={event => setForm(value => ({...value, password:event.target.value}))} placeholder="At least 8 characters" autoComplete="new-password" minLength="8" required/><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div><small className="field-hint">Use at least one letter and one number.</small></label>
+            <label>Confirm password<div className="login-input"><LockKeyhole size={17}/><input type={showPassword ? 'text' : 'password'} value={form.password_confirmation} onChange={event => setForm(value => ({...value, password_confirmation:event.target.value}))} placeholder="Repeat your password" autoComplete="new-password" minLength="8" required/></div></label>
+          </> : <>
+            <label>Username or email<div className="login-input"><Mail size={17}/><input value={login} onChange={event => setLogin(event.target.value)} placeholder="superadmin or admin@example.test" autoComplete="username" required autoFocus/></div></label>
+            <label>Password<div className="login-input"><LockKeyhole size={17}/><input type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} placeholder="Enter your password" autoComplete="current-password" required/><button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div></label>
+          </>}
+          <div className="login-options"><span>{isRegister ? 'Role: viewer (super-admin can promote)' : 'Accounting database account'}</span><a href="mailto:admin@bakingstore.com">Need help?</a></div>
+          {error && <div className="portal-login-error" role="alert"><CircleHelp size={16}/><span>{error}</span></div>}
+          <button className="login-submit" disabled={submitting}>{submitting ? <><RefreshCw className="spin" size={17}/>{isRegister ? 'Creating account…' : 'Signing in…'}</> : <>{isRegister ? 'Create viewer account' : 'Sign in to Ledgerly'}<ChevronRight size={17}/></>}</button>
+        </form>
+        <div className="login-security"><ShieldCheck size={15}/><span>Protected by Laravel Sanctum</span></div>
+      </div>
+      <p className="login-copyright">© 2026 Baking Store Co. · Internal use only</p>
+    </section>
+  </main>;
+}
+
 function App() {
-  const [active, setActive] = useState('dashboard');
+  const [session, setSession] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('accounting_user')); } catch { return null; }
+  });
+  const [authMode, setAuthMode] = useState(() => window.location.pathname === '/register' ? 'register' : 'login');
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [active, setActive] = useState(() => pageFromPath(window.location.pathname));
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const navigate = (page, accountId = null) => {
+    const path = page === 'accounts' && accountId != null
+      ? `/financial-accounts/${encodeURIComponent(accountId)}`
+      : pagePaths[page] || '/';
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    setActive(page);
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+      setActive(pageFromPath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const clearExpiredSession = () => {
+      sessionStorage.removeItem('accounting_token');
+      sessionStorage.removeItem('accounting_user');
+      setSession(null);
+    };
+    window.addEventListener('accounting:unauthorized', clearExpiredSession);
+    return () => window.removeEventListener('accounting:unauthorized', clearExpiredSession);
+  }, []);
+
+  const logout = async () => {
+    try { await authApi.logout(); } catch { /* Clear the local session even if the token already expired. */ }
+    sessionStorage.removeItem('accounting_token');
+    sessionStorage.removeItem('accounting_user');
+    setSession(null);
+  };
+
   const page = useMemo(() => {
-    if (active === 'dashboard') return <Dashboard onNavigate={setActive}/>;
-    if (active === 'accounts') return <AccountsPage/>;
+    if (active === 'dashboard') return <Dashboard onNavigate={navigate}/>;
+    if (active === 'accounts') {
+      const accountId = currentPath.match(/^\/financial-accounts\/([^/]+)$/)?.[1];
+      return <AccountsPage requestedAccountId={accountId ? decodeURIComponent(accountId) : null} onSelectAccount={id => navigate('accounts', id)}/>;
+    }
     if (active === 'payments') return <PaymentsPage/>;
     if (active === 'reconciliation') return <PaymentsPage title="Payment reconciliation"/>;
     return <PlaceholderPage active={active}/>;
-  }, [active]);
-  return <div className="app-shell"><Sidebar active={active} setActive={setActive} open={menuOpen} close={()=>setMenuOpen(false)}/><div className="main-shell"><Header active={active} onMenu={()=>setMenuOpen(true)} onNew={()=>setModalOpen(true)}/>{page}</div>{modalOpen && <NewTransactionModal close={()=>setModalOpen(false)}/>}</div>;
+  }, [active, currentPath]);
+  const changeAuthMode = nextMode => {
+    const nextPath = nextMode === 'register' ? '/register' : '/login';
+    window.history.replaceState({}, '', nextPath);
+    setAuthMode(nextMode);
+  };
+  const completeAuthentication = user => {
+    setSession(user);
+    navigate('dashboard');
+  };
+  if (!session) return <LoginPage mode={authMode} onModeChange={changeAuthMode} onAuthenticated={completeAuthentication}/>;
+  return <div className="app-shell"><Sidebar active={active} setActive={navigate} open={menuOpen} close={()=>setMenuOpen(false)} user={session} onLogout={logout}/><div className="main-shell"><Header active={active} onMenu={()=>setMenuOpen(true)} onNew={()=>setModalOpen(true)}/>{page}</div>{modalOpen && <NewTransactionModal close={()=>setModalOpen(false)}/>}</div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);

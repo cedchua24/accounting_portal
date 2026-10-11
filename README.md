@@ -10,7 +10,9 @@ copy .env.example .env
 npm run dev
 ```
 
-Set `VITE_API_BASE_URL` to the centralized Laravel API. Never point this frontend at individual branch databases.
+In development, Vite proxies `/api` to the centralized accounting Laravel app at `http://localhost/accounting/public`. Authentication and registration use that same API (`POST /api/login`, `POST /api/register`, and `POST /api/logout`) and its `accounting` database. Override `VITE_API_PROXY_TARGET` if Laravel is served elsewhere. Never point the browser directly at MySQL or an individual branch database.
+
+The Financial accounts page calls `GET /financial-accounts` relative to that base URL and reads both plain arrays and Laravel paginated `{ "data": [...] }` responses. Open `/financial-accounts` directly to see all accounts, or `/financial-accounts/:id` to bookmark a selected account.
 
 ## Production build
 

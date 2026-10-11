@@ -14,10 +14,26 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Request failed (${response.status})`);
+    const requestError = new Error(error.message || `Request failed (${response.status})`);
+    requestError.status = response.status;
+    requestError.details = error.errors;
+    if (response.status === 401 && token) window.dispatchEvent(new Event('accounting:unauthorized'));
+    throw requestError;
   }
   return response.status === 204 ? null : response.json();
 }
+
+export const authApi = {
+  login: (login, password) => request('/login', {
+    method: 'POST',
+    body: JSON.stringify({ login, password, device_name: 'ledgerly-web' }),
+  }),
+  register: (payload) => request('/register', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, device_name: 'ledgerly-web' }),
+  }),
+  logout: () => request('/logout', { method: 'POST' }),
+};
 
 export const accountingApi = {
   financialAccounts: (params = '') => request(`/financial-accounts${params}`),

@@ -30,3 +30,7 @@
   background: #fff1f7;
   box-shadow: inset 3px 0 0 #c42870;
 }
+
+.expense-section-nav>a{display:flex;align-items:center;gap:7px;min-width:max-content;padding:8px 11px;color:#6f7c74;background:transparent;border:0;border-radius:8px;font-size:10px;font-weight:700}.expense-section-nav>a:hover{color:var(--expense-pink-dark);background:var(--expense-pink-soft)}.expense-section-nav>a.active{color:#fff;background:linear-gradient(135deg,var(--expense-pink-dark),var(--expense-pink));box-shadow:0 4px 12px rgba(132,21,68,.2)}
+.expense-title-actions>a.expense-view-button{display:inline-flex;align-items:center;justify-content:center}
+@media(max-width:480px){.expense-section-nav>a{padding:8px 9px}.expense-section-nav>a span{font-size:9px}}

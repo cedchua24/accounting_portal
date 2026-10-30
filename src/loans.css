@@ -50,10 +50,10 @@
 @media(max-width:680px){.loan-due-filters{grid-template-columns:1fr 1fr}.loan-due-filters .loan-overdue-toggle{grid-column:1/-1}.loan-due-filters .icon-button{grid-column:2;justify-self:end}}
 
 /* Clearer loan-list hierarchy, with monetary information aligned on the right. */
-.loan-list-row{min-width:1080px;grid-template-columns:225px minmax(140px,.88fr) 115px 110px 118px 118px minmax(185px,1fr) 74px 18px;gap:10px;padding:20px 14px;font-size:12px}
+.loan-list-row{min-width:1220px;grid-template-columns:225px minmax(140px,.88fr) 125px 115px 110px 118px 118px minmax(185px,1fr) 74px 18px;gap:10px;padding:20px 14px;font-size:12px}
 .loan-list-head{padding-top:12px;padding-bottom:12px;font-size:9px}
-.loan-list-head>span:nth-child(3),.loan-list-head>span:nth-child(4),.loan-list-head>span:nth-child(6),.loan-list-head>span:nth-child(7){text-align:right}
-.loan-list-head>span:nth-child(8){text-align:center}
+.loan-list-head>span:nth-child(4),.loan-list-head>span:nth-child(5),.loan-list-head>span:nth-child(7),.loan-list-head>span:nth-child(8){text-align:right}
+.loan-list-head>span:nth-child(9){text-align:center}
 .loan-list-row>span strong{color:#21372c;font-size:12px;line-height:1.35}
 .loan-list-row>span small{margin-top:5px;font-size:9px;line-height:1.35}
 .loan-person{gap:12px}.loan-person>i{width:38px;height:38px;border-radius:11px}
@@ -65,6 +65,7 @@
 .loan-funding-summary{max-width:105px;margin:0!important;color:#66786e!important;font-size:8.5px!important;font-weight:700}
 .loan-person .direction-badge{flex:0 0 auto;margin:0;padding:4px 7px;font-size:7.5px}
 .loan-user-account-cell{display:flex!important;min-width:0;flex-direction:column;justify-content:center}.loan-user-account-cell>span{display:flex;min-width:0;align-items:center;gap:5px;color:#41658f}.loan-user-account-cell>span svg{flex:0 0 auto}.loan-user-account-cell>span strong{overflow:hidden;color:#31577f!important;font-size:10px!important;text-overflow:ellipsis;white-space:nowrap}.loan-user-account-cell>small{color:#8a9690!important}
+.loan-installment-cell{display:flex!important;min-width:0;flex-direction:column;justify-content:center}.loan-installment-cell>strong{color:#31577f!important;font:800 11px 'Manrope'!important}.loan-installment-cell>small{margin-top:4px!important;color:#6f8d7c!important;white-space:nowrap}.loan-installment-cell>small:last-child{color:#9a6727!important}.loan-installment-cell.complete>strong{color:#347155!important}.loan-installment-cell.complete>small{color:#819087!important}
 .loan-next-due{padding:7px 8px;border-left:3px solid transparent;border-radius:8px}.loan-next-due strong{font-size:12.5px!important}.loan-next-due small{color:#6f7e75!important}.loan-next-due.urgent{border-left-color:#c64551;background:#fff1f2}.loan-next-due.urgent strong,.loan-next-due.overdue strong{color:#a73743!important}.loan-next-due.urgent small,.loan-next-due.overdue small{color:#b65059!important;font-weight:700}.loan-next-due.overdue{border-left-color:#a73743;background:#fae9eb}.loan-next-due.due-soon{border-left-color:#d28a2f;background:#fff7ea}.loan-next-due.due-soon strong{color:#8a5a1e!important}.loan-next-due.due-soon small{color:#9a6727!important;font-weight:700}
 .loan-total-cell,.loan-interest-total-cell,.loan-due-amount{display:flex!important;min-width:0;flex-direction:column;align-items:flex-end;text-align:right}
 .loan-total-cell>strong,.loan-interest-total-cell>strong,.loan-due-amount>strong{font:700 12.5px 'Manrope'!important}
@@ -109,3 +110,5 @@
 .loan-due-progress strong{color:#225f45}.loan-due-progress small:last-child{color:#41658f;font-weight:700}
 .loan-due-charges strong,.loan-due-total strong{font:700 12px 'Manrope'!important}.loan-due-charges.red strong{color:#a73743}.loan-due-charges small:last-child{color:#41658f}.loan-due-total{text-align:right}.loan-due-total>small{display:flex!important;justify-content:flex-end}.loan-due-total .installment-status{margin-left:auto}
 .loan-due-list button.loan-due-row{transition:background .15s ease,box-shadow .15s ease}.loan-due-list button.loan-due-row:hover{box-shadow:inset 3px 0 #39765a}
+.loan-list a.loan-list-row{transition:background .15s ease,box-shadow .15s ease}.loan-list a.loan-list-row:hover{position:relative;z-index:1;background:#f7faf7;box-shadow:inset 3px 0 #39765a}.loan-list a.loan-list-row:hover .loan-list-chevron{color:#2f6d53;transform:translateX(2px)}
+.loan-due-list a.loan-due-row{transition:background .15s ease,box-shadow .15s ease}.loan-due-list a.loan-due-row:hover{background:#f7faf7;box-shadow:inset 3px 0 #39765a}.loan-due-list a.loan-due-row.overdue{background:#fffafa}.loan-due-list a.loan-due-row.overdue:hover{background:#fff4f4}

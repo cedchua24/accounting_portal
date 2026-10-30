@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, BadgeDollarSign,
@@ -16,6 +16,8 @@ import './expenses.css';
 import { accountingApi, authApi } from './api.js';
 import ExpensesWorkspace from './expenses.jsx';
 import UserAccountsWorkspace from './user-accounts.jsx';
+import { AppLink, pagePath, pagePaths, visitPath } from './navigation.jsx';
+import { authSession, createAuthTabBridge } from './auth-session.js';
 
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 });
 
@@ -42,33 +44,14 @@ function shortDate(dateString, includeYear = false) {
   }).format(new Date(`${dateString}T00:00:00`));
 }
 
-const pagePaths = {
-  dashboard: '/',
-  'cash-balance': '/cash-balance',
-  collections: '/collections',
-  'user-accounts': '/user-accounts',
-  accounts: '/financial-accounts',
-  payments: '/payments',
-  refunds: '/customer-refunds',
-  'refund-list': '/customer-refunds/list',
-  'upcoming-dues': '/upcoming-dues',
-  reconciliation: '/reconciliation',
-  transfers: '/transfers',
-  'transfer-history': '/transfers/history',
-  'credit-cards': '/credit-cards',
-  loans: '/loans',
-  expenses: '/expenses/ledger',
-  ledger: '/general-ledger',
-  reports: '/reports',
-  interbranch: '/interbranch',
-};
-
 const standalonePageTitles = {
   'cash-balance': 'Cash balance',
   collections: 'Collections',
   'upcoming-dues': 'Upcoming dues',
   'transfer-history': 'Transfer history',
   'refund-list': 'Customer refund list',
+  help: 'Help center',
+  settings: 'Settings',
 };
 
 function sidebarSelection(activePage) {
@@ -136,7 +119,7 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
   return <>
     {open && <button className="scrim" onClick={close} aria-label="Close navigation" />}
     <aside className={`sidebar ${open ? 'open' : ''}`}>
-      <div className="sidebar-top"><Logo /><button className="mobile-close" onClick={close}><X size={20}/></button></div>
+      <div className="sidebar-top"><AppLink href={pagePath('dashboard')} onNavigate={close} aria-label="MDR Accounting dashboard"><Logo /></AppLink><button className="mobile-close" onClick={close}><X size={20}/></button></div>
       <div className="company-switcher">
         <div className="company-avatar">BS</div>
         <div><strong>Baking Store Co.</strong><span>8 branches</span></div>
@@ -147,24 +130,24 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
           <p>{group.label}</p>
           {group.items.map(item => item.id === 'refunds' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'refunds' ? 'parent-active' : ''}`} aria-expanded={refundMenuOpen} onClick={() => setRefundMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={refundMenuOpen ? 'open' : ''} size={15}/></button>
-            {refundMenuOpen && <div className="nav-submenu"><button type="button" className={active === 'refunds' ? 'active' : ''} aria-current={active === 'refunds' ? 'page' : undefined} onClick={() => { setActive('refunds'); close(); }}><Plus size={14}/><span>Add refund</span></button><button type="button" className={active === 'refund-list' ? 'active' : ''} aria-current={active === 'refund-list' ? 'page' : undefined} onClick={() => { setActive('refund-list'); close(); }}><ReceiptText size={14}/><span>Refund list</span></button></div>}
+            {refundMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('refunds')} className={active === 'refunds' ? 'active' : ''} aria-current={active === 'refunds' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add refund</span></AppLink><AppLink href={pagePath('refund-list')} className={active === 'refund-list' ? 'active' : ''} aria-current={active === 'refund-list' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Refund list</span></AppLink></div>}
           </div> : item.id === 'transfers' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'transfers' ? 'parent-active' : ''}`} aria-expanded={transferMenuOpen} onClick={() => setTransferMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={transferMenuOpen ? 'open' : ''} size={15}/></button>
-            {transferMenuOpen && <div className="nav-submenu"><button type="button" className={active === 'transfers' ? 'active' : ''} aria-current={active === 'transfers' ? 'page' : undefined} onClick={() => { setActive('transfers'); close(); }}><Plus size={14}/><span>Add transfer</span></button><button type="button" className={active === 'transfer-history' ? 'active' : ''} aria-current={active === 'transfer-history' ? 'page' : undefined} onClick={() => { setActive('transfer-history'); close(); }}><ReceiptText size={14}/><span>History</span></button></div>}
+            {transferMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('transfers')} className={active === 'transfers' ? 'active' : ''} aria-current={active === 'transfers' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add transfer</span></AppLink><AppLink href={pagePath('transfer-history')} className={active === 'transfer-history' ? 'active' : ''} aria-current={active === 'transfer-history' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>History</span></AppLink></div>}
           </div> : item.id === 'loans' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'loans' ? 'parent-active' : ''}`} aria-expanded={loanMenuOpen} onClick={() => setLoanMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={loanMenuOpen ? 'open' : ''} size={15}/></button>
-            {loanMenuOpen && <div className="nav-submenu"><button type="button" className={currentPath === '/loans/new' ? 'active' : ''} aria-current={currentPath === '/loans/new' ? 'page' : undefined} onClick={() => { setActive('loans', null, { view: 'new' }); close(); }}><Plus size={14}/><span>Add loan</span></button><button type="button" className={currentPath === '/loans' || /^\/loans\/\d+$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/loans' ? 'page' : undefined} onClick={() => { setActive('loans'); close(); }}><ReceiptText size={14}/><span>Loan list</span></button><button type="button" className={currentPath === '/loans/upcoming' ? 'active' : ''} aria-current={currentPath === '/loans/upcoming' ? 'page' : undefined} onClick={() => { setActive('loans', null, { view: 'upcoming' }); close(); }}><CalendarDays size={14}/><span>Upcoming dues</span></button></div>}
+            {loanMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('loans', null, { view: 'new' })} className={currentPath === '/loans/new' ? 'active' : ''} aria-current={currentPath === '/loans/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add loan</span></AppLink><AppLink href={pagePath('loans')} className={currentPath === '/loans' || /^\/loans\/[^/]+$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/loans' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Loan list</span></AppLink><AppLink href={pagePath('loans', null, { view: 'upcoming' })} className={currentPath === '/loans/upcoming' ? 'active' : ''} aria-current={currentPath === '/loans/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink></div>}
           </div> : item.id === 'expenses' ? <div className="nav-dropdown expense-nav" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'expenses' ? 'parent-active' : ''}`} aria-expanded={expenseMenuOpen} onClick={() => setExpenseMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={expenseMenuOpen ? 'open' : ''} size={15}/></button>
-            {expenseMenuOpen && <div className="nav-submenu expense-nav-submenu"><button type="button" className={currentPath === '/expenses/chart-accounts' ? 'active' : ''} aria-current={currentPath === '/expenses/chart-accounts' ? 'page' : undefined} onClick={() => { setActive('expenses', null, { view: 'chart-accounts' }); close(); }}><FolderTree size={14}/><span>Chart of Accounts</span></button><button type="button" className={currentPath === '/expenses/types' ? 'active' : ''} aria-current={currentPath === '/expenses/types' ? 'page' : undefined} onClick={() => { setActive('expenses', null, { view: 'types' }); close(); }}><Tags size={14}/><span>Expense Type</span></button><button type="button" className={currentPath === '/expenses/categories' ? 'active' : ''} aria-current={currentPath === '/expenses/categories' ? 'page' : undefined} onClick={() => { setActive('expenses', null, { view: 'categories' }); close(); }}><TableProperties size={14}/><span>Expense Category</span></button><button type="button" className={currentPath === '/expenses/items' ? 'active' : ''} aria-current={currentPath === '/expenses/items' ? 'page' : undefined} onClick={() => { setActive('expenses', null, { view: 'items' }); close(); }}><ReceiptText size={14}/><span>Expense</span></button><button type="button" className={currentPath === '/expenses' || currentPath === '/expenses/ledger' || currentPath === '/expenses/approvals' ? 'active' : ''} aria-current={currentPath === '/expenses' || currentPath === '/expenses/ledger' ? 'page' : undefined} onClick={() => { setActive('expenses', null, { view: 'ledger' }); close(); }}><BadgeDollarSign size={14}/><span>Expense Transaction</span></button></div>}
-          </div> : <button key={item.id} className={selectedItem === item.id ? 'active' : ''} aria-current={selectedItem === item.id ? 'page' : undefined} onClick={() => { setActive(item.id); close(); }}>
+            {expenseMenuOpen && <div className="nav-submenu expense-nav-submenu"><AppLink href={pagePath('expenses', null, { view: 'chart-accounts' })} className={currentPath === '/expenses/chart-accounts' ? 'active' : ''} aria-current={currentPath === '/expenses/chart-accounts' ? 'page' : undefined} onNavigate={close}><FolderTree size={14}/><span>Chart of Accounts</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'types' })} className={currentPath === '/expenses/types' ? 'active' : ''} aria-current={currentPath === '/expenses/types' ? 'page' : undefined} onNavigate={close}><Tags size={14}/><span>Expense Type</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'categories' })} className={currentPath === '/expenses/categories' ? 'active' : ''} aria-current={currentPath === '/expenses/categories' ? 'page' : undefined} onNavigate={close}><TableProperties size={14}/><span>Expense Category</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'items' })} className={currentPath === '/expenses/items' ? 'active' : ''} aria-current={currentPath === '/expenses/items' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Expense</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'ledger' })} className={currentPath === '/expenses' || currentPath === '/expenses/ledger' || currentPath === '/expenses/approvals' ? 'active' : ''} aria-current={currentPath === '/expenses' || currentPath === '/expenses/ledger' ? 'page' : undefined} onNavigate={close}><BadgeDollarSign size={14}/><span>Expense Transaction</span></AppLink></div>}
+          </div> : <AppLink href={pagePath(item.id)} key={item.id} className={selectedItem === item.id ? 'active' : ''} aria-current={selectedItem === item.id ? 'page' : undefined} onNavigate={close}>
             <item.icon size={18}/><span>{item.label}</span>{item.count && <em>{item.count}</em>}
-          </button>)}
+          </AppLink>)}
         </div>)}
       </nav>
       <div className="sidebar-footer">
-        <button><CircleHelp size={18}/><span>Help center</span></button>
-        <button><Settings size={18}/><span>Settings</span></button>
+        <AppLink href={pagePath('help')}><CircleHelp size={18}/><span>Help center</span></AppLink>
+        <AppLink href={pagePath('settings')}><Settings size={18}/><span>Settings</span></AppLink>
         <button onClick={onLogout}><LogOut size={18}/><span>Sign out</span></button>
         <div className="user-card"><div className="avatar">{(user?.name || user?.username || 'User').split(/\s+/).map(part => part[0]).join('').slice(0,2).toUpperCase()}</div><div><strong>{user?.name || user?.username || 'Accounting user'}</strong><span>{String(user?.role || 'viewer').replaceAll('_', ' ')}</span></div><MoreHorizontal size={18}/></div>
       </div>
@@ -431,10 +414,10 @@ function Dashboard({ onNavigate }) {
     </section>
 
     <section className="metric-grid">
-      <button className="metric-card featured" onClick={() => onNavigate('cash-balance')} title={cashBalanceError || undefined}><div className="metric-top"><span>Total cash balance</span><div className="metric-icon"><WalletCards size={19}/></div></div><strong>{cashBalanceError ? 'Unavailable' : hasCashBalance ? peso.format(totalCashBalance) : 'Loading…'}</strong><div className="metric-foot">{cashBalanceError ? <span>Could not load balance</span> : cashBalance ? <><span className={changeClass}>{hasChange && <ChangeIcon size={14}/>} {hasChange ? `${Math.abs(changePercentage).toFixed(2)}%` : '—'}</span><span>from opening balance</span></> : <span>As of {shortDate(dayTo, true)}</span>}</div><div className="sparkline"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></button>
-      <button className="metric-card" onClick={() => onNavigate('collections')} title={collectionsError || undefined}><div className="metric-top"><span>Collections</span><div className="metric-icon pale-green"><ArrowDownLeft size={19}/></div></div><strong>{collectionsError ? 'Unavailable' : hasCollections ? peso.format(totalCollections) : 'Loading…'}</strong><div className="metric-foot">{collectionsError ? <span>Could not load collections</span> : collections ? <><span className={collectionsChangeClass}>{hasCollectionsChange && <CollectionsChangeIcon size={14}/>} {hasCollectionsChange ? `${Math.abs(collectionsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></button>
-      <button className="metric-card" onClick={() => onNavigate('payments')} title={paymentsError || undefined}><div className="metric-top"><span>Payments</span><div className="metric-icon pale-amber"><ArrowUpRight size={19}/></div></div><strong>{paymentsError ? 'Unavailable' : hasPayments ? peso.format(totalPayments) : 'Loading…'}</strong><div className="metric-foot">{paymentsError ? <span>Could not load payments</span> : payments ? <><span className={paymentsChangeClass}>{hasPaymentsChange && <PaymentsChangeIcon size={14}/>} {hasPaymentsChange ? `${Math.abs(paymentsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></button>
-      <button className="metric-card" onClick={() => onNavigate('upcoming-dues')} title={upcomingDuesError || undefined}><div className="metric-top"><span>Upcoming dues</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load upcoming dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>{isToday ? 'due today' : nearestDueDate ? `nearest ${shortDate(nearestDueDate)}` : 'selected period'}</span></> : <span>{periodLabel}</span>}</div></button>
+      <AppLink href={pagePath('cash-balance')} className="metric-card featured" title={cashBalanceError || undefined}><div className="metric-top"><span>Total cash balance</span><div className="metric-icon"><WalletCards size={19}/></div></div><strong>{cashBalanceError ? 'Unavailable' : hasCashBalance ? peso.format(totalCashBalance) : 'Loading…'}</strong><div className="metric-foot">{cashBalanceError ? <span>Could not load balance</span> : cashBalance ? <><span className={changeClass}>{hasChange && <ChangeIcon size={14}/>} {hasChange ? `${Math.abs(changePercentage).toFixed(2)}%` : '—'}</span><span>from opening balance</span></> : <span>As of {shortDate(dayTo, true)}</span>}</div><div className="sparkline"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></AppLink>
+      <AppLink href={pagePath('collections')} className="metric-card" title={collectionsError || undefined}><div className="metric-top"><span>Collections</span><div className="metric-icon pale-green"><ArrowDownLeft size={19}/></div></div><strong>{collectionsError ? 'Unavailable' : hasCollections ? peso.format(totalCollections) : 'Loading…'}</strong><div className="metric-foot">{collectionsError ? <span>Could not load collections</span> : collections ? <><span className={collectionsChangeClass}>{hasCollectionsChange && <CollectionsChangeIcon size={14}/>} {hasCollectionsChange ? `${Math.abs(collectionsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></AppLink>
+      <AppLink href={pagePath('payments')} className="metric-card" title={paymentsError || undefined}><div className="metric-top"><span>Payments</span><div className="metric-icon pale-amber"><ArrowUpRight size={19}/></div></div><strong>{paymentsError ? 'Unavailable' : hasPayments ? peso.format(totalPayments) : 'Loading…'}</strong><div className="metric-foot">{paymentsError ? <span>Could not load payments</span> : payments ? <><span className={paymentsChangeClass}>{hasPaymentsChange && <PaymentsChangeIcon size={14}/>} {hasPaymentsChange ? `${Math.abs(paymentsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></AppLink>
+      <AppLink href={pagePath('upcoming-dues')} className="metric-card" title={upcomingDuesError || undefined}><div className="metric-top"><span>Upcoming dues</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load upcoming dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>{isToday ? 'due today' : nearestDueDate ? `nearest ${shortDate(nearestDueDate)}` : 'selected period'}</span></> : <span>{periodLabel}</span>}</div></AppLink>
     </section>
 
     <section className="dashboard-grid">
@@ -443,7 +426,7 @@ function Dashboard({ onNavigate }) {
         {cashFlowError ? <div className="cashflow-state error-state"><CircleHelp size={19}/><span>{cashFlowError}</span></div> : !cashFlow || !hasCashFlow ? <div className="cashflow-state"><RefreshCw className="spin" size={19}/><span>Loading cash flow…</span></div> : <><div className="cashflow-summary"><div><span>Money in</span><strong>{peso.format(cashFlowMoneyIn)}</strong></div><div><span>Money out</span><strong>{peso.format(cashFlowMoneyOut)}</strong></div><div><span>Net cash flow</span><strong className={cashFlowNet > 0 ? 'green' : cashFlowNet < 0 ? 'red' : ''}>{cashFlowNet > 0 ? '+' : ''}{peso.format(cashFlowNet)}</strong></div></div><MiniChart dataPoints={cashFlow.points}/></>}
       </article>
       <article className="panel obligations-panel">
-        <div className="panel-head"><div><h2>Upcoming dues</h2><p>Obligations requiring attention</p></div><button className="link-button" onClick={() => onNavigate('upcoming-dues')}>View all</button></div>
+        <div className="panel-head"><div><h2>Upcoming dues</h2><p>Obligations requiring attention</p></div><AppLink href={pagePath('upcoming-dues')} className="link-button">View all</AppLink></div>
         {upcomingDuesListError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{upcomingDuesListError}</span></div> : !upcomingDuesList ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading upcoming dues…</span></div> : upcomingDuesList.data?.length === 0 ? <div className="dashboard-panel-state"><Check size={19}/><span>No obligations due in the next 14 days.</span></div> : <div className="due-list">{(upcomingDuesList.data || []).map(item => {
           const urgent = item.is_overdue || Number(item.days_until_due) <= 3;
           return <div className="due-row" key={item.id}>
@@ -457,16 +440,16 @@ function Dashboard({ onNavigate }) {
 
     <section className="dashboard-grid lower-grid">
       <article className="panel accounts-panel">
-        <div className="panel-head"><div><h2>Financial accounts</h2><p>Live balances from posted journal lines</p></div><button className="link-button" onClick={() => onNavigate('accounts')}>Manage accounts</button></div>
+        <div className="panel-head"><div><h2>Financial accounts</h2><p>Live balances from posted journal lines</p></div><AppLink href={pagePath('accounts')} className="link-button">Manage accounts</AppLink></div>
         {dashboardAccountsError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{dashboardAccountsError}</span></div> : !dashboardAccounts ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading financial accounts…</span></div> : dashboardAccounts.length === 0 ? <div className="dashboard-panel-state"><Landmark size={19}/><span>No active financial accounts.</span></div> : <div className="account-list">{dashboardAccounts.map(account => {
           const displayBalance = account.isCredit ? -Math.abs(account.currentBalance) : account.currentBalance;
-          return <button className="account-row" key={account.id} onClick={() => onNavigate('accounts', account.id)}>
+          return <AppLink href={pagePath('accounts', account.id)} className="account-row" key={account.id}>
             <span className="account-logo" style={{background: account.color}}>{account.initials}</span><span className="account-info"><strong>{account.name}</strong><span>{account.type} · {account.accountNumber}</span></span><span className="account-balance"><strong className={displayBalance < 0 ? 'red' : ''}>{money(displayBalance, account.currency || 'PHP')}</strong><span className="green">Active</span></span><ChevronRight size={17}/>
-          </button>;
+          </AppLink>;
         })}</div>}
       </article>
       <article className="panel activity-panel">
-        <div className="panel-head"><div><h2>Recent activity</h2><p>Latest activity from every branch</p></div><button className="link-button" onClick={() => onNavigate('payments')}>View all</button></div>
+        <div className="panel-head"><div><h2>Recent activity</h2><p>Latest activity from every branch</p></div><AppLink href={pagePath('payments')} className="link-button">View all</AppLink></div>
         {recentActivityError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{recentActivityError}</span></div> : !recentActivity ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading recent activity…</span></div> : recentActivity.data?.length === 0 ? <div className="dashboard-panel-state"><Activity size={19}/><span>No recent activity.</span></div> : <div className="activity-list">{(recentActivity.data || []).map(item => {
           const amount = Number(item.amount || 0);
           const isInflow = item.type === 'in';
@@ -522,7 +505,7 @@ function CashBalancePage({ onOpenAccount }) {
 
   const total = accounts.reduce((sum, account) => sum + account.currentBalance, 0);
   const available = accounts.reduce((sum, account) => sum + account.availableBalance, 0);
-  return <main className="content inner-page"><div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Total cash balance</h1><p>Current balances across cash, bank, checking, and e-wallet accounts.</p></div><button className="secondary-button" onClick={() => onOpenAccount()}><Landmark size={16}/>Manage accounts</button></div><section className="summary-strip module-summary"><div><span>Current balance</span><strong>{peso.format(total)}</strong></div><div><span>Available balance</span><strong>{peso.format(available)}</strong></div><div><span>Active cash accounts</span><strong>{accounts.length}</strong></div></section>{loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading balances…</h2></section>}{!loading && error && <section className="panel account-state error-state"><CircleHelp size={22}/><h2>Balances could not be loaded</h2><p>{error}</p></section>}{!loading && !error && <section className="account-cards account-list-page">{accounts.map(account => <button className="big-account-card" key={account.id} onClick={() => onOpenAccount(account.id)}><span className="account-logo large" style={{background: account.color}}>{account.initials}</span><span><small>{account.type}</small><strong>{account.name}</strong><em>{account.accountNumber}</em></span><span className="card-balance"><small>Current balance</small><strong>{peso.format(account.currentBalance)}</strong></span><ChevronRight size={17}/></button>)}</section>}</main>;
+  return <main className="content inner-page"><div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Total cash balance</h1><p>Current balances across cash, bank, checking, and e-wallet accounts.</p></div><AppLink href={pagePath('accounts')} className="secondary-button"><Landmark size={16}/>Manage accounts</AppLink></div><section className="summary-strip module-summary"><div><span>Current balance</span><strong>{peso.format(total)}</strong></div><div><span>Available balance</span><strong>{peso.format(available)}</strong></div><div><span>Active cash accounts</span><strong>{accounts.length}</strong></div></section>{loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading balances…</h2></section>}{!loading && error && <section className="panel account-state error-state"><CircleHelp size={22}/><h2>Balances could not be loaded</h2><p>{error}</p></section>}{!loading && !error && <section className="account-cards account-list-page">{accounts.map(account => <AppLink href={pagePath('accounts', account.id)} className="big-account-card" key={account.id}><span className="account-logo large" style={{background: account.color}}>{account.initials}</span><span><small>{account.type}</small><strong>{account.name}</strong><em>{account.accountNumber}</em></span><span className="card-balance"><small>Current balance</small><strong>{peso.format(account.currentBalance)}</strong></span><ChevronRight size={17}/></AppLink>)}</section>}</main>;
 }
 
 function LiveRecordsPage({ eyebrow, title, description, Icon, columns, loadRecords, rowValues, emptyMessage }) {
@@ -719,7 +702,7 @@ function TransfersPage({ onViewHistory }) {
   if (loading) return <main className="content inner-page"><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading transfer workspace…</strong></section></main>;
 
   return <main className="content inner-page transfer-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Transfer money</h1><p>Move funds between your accounts or record money sent to an external person or account.</p></div><button type="button" className="secondary-button" onClick={onViewHistory}><ReceiptText size={16}/>View transfer history</button></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Transfer money</h1><p>Move funds between your accounts or record money sent to an external person or account.</p></div><AppLink href={pagePath('transfer-history')} className="secondary-button"><ReceiptText size={16}/>View transfer history</AppLink></div>
     {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Transfer needs attention</strong>{error}</span><button onClick={() => setError('')}>Dismiss</button></div>}
     {createdTransfer && <div className="account-save-message success"><Check size={18}/><span><strong>{createdTransfer.status === 'posted' ? 'Transfer posted' : 'Draft saved'}</strong>{createdTransfer.number || 'The transfer'} · {money(createdTransfer.amount, createdTransfer.currency || 'PHP')}</span><button onClick={() => setCreatedTransfer(null)}>Dismiss</button></div>}
 
@@ -874,7 +857,7 @@ function CustomerRefundsPage({ onViewList }) {
   if (loading) return <main className="content inner-page"><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading refund workspace…</strong></section></main>;
 
   return <main className="content inner-page transfer-page refund-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund</h1><p>Keep the original sale intact, record the replacement value, and return only the difference.</p></div><button type="button" className="secondary-button" onClick={onViewList}><ReceiptText size={16}/>View refund list</button></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund</h1><p>Keep the original sale intact, record the replacement value, and return only the difference.</p></div><AppLink href={pagePath('refund-list')} className="secondary-button"><ReceiptText size={16}/>View refund list</AppLink></div>
     {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Refund needs attention</strong>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
     {createdRefund && <div className="account-save-message success"><Check size={18}/><span><strong>{createdRefund.status === 'posted' ? 'Refund posted' : 'Draft saved'}</strong>{createdRefund.number || createdRefund.reference || 'Customer refund'} · {money(createdRefund.amount, createdRefund.currency || 'PHP')}</span><button type="button" onClick={() => setCreatedRefund(null)}>Dismiss</button></div>}
 
@@ -1008,7 +991,7 @@ function CustomerRefundListPage({ onNewRefund }) {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   return <main className="content inner-page transfer-history-page refund-list-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund list</h1><p>Review refund drafts, posted returns, and voided records.</p></div><button type="button" className="primary-button" onClick={onNewRefund}><Plus size={16}/>Add refund</button></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund list</h1><p>Review refund drafts, posted returns, and voided records.</p></div><AppLink href={pagePath('refunds')} className="primary-button"><Plus size={16}/>Add refund</AppLink></div>
     <section className="panel transfer-history">
       <div className="panel-head"><div><h2>Customer refunds</h2><p>Filter refunds by date, status, or funding account.</p></div><div className="history-head-actions"><span className="transaction-count">{loading ? 'Loading…' : `${total} records`}</span>{activeFilterCount > 0 && <span className="transfer-filter-count">{activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}</span>}</div></div>
       <form className="transaction-filters transfer-history-filters" onSubmit={applyFilters}>
@@ -1104,7 +1087,7 @@ function TransferHistoryPage({ onNewTransfer }) {
     .sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
 
   return <main className="content inner-page transfer-history-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Transfer history</h1><p>Review internal and external money transfers, newest first.</p></div><button type="button" className="primary-button" onClick={onNewTransfer}><Plus size={16}/>New transfer</button></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Transfer history</h1><p>Review internal and external money transfers, newest first.</p></div><AppLink href={pagePath('transfers')} className="primary-button"><Plus size={16}/>New transfer</AppLink></div>
     <section className="panel transfer-history">
       <div className="panel-head"><div><h2>Money transfers</h2><p>Filter by transfer date, posting status, or source/destination account.</p></div><div className="history-head-actions"><span className="transaction-count">{loading ? 'Loading…' : `${total} records`}</span>{activeFilterCount > 0 && <span className="transfer-filter-count">{activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}</span>}</div></div>
       <form className="transaction-filters transfer-history-filters" onSubmit={applyFilters}>
@@ -1481,7 +1464,7 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
   const otherAccountChoices = accountChoices.filter(account => !groupedAccountIds.has(String(account.id)));
 
   return <main className="content inner-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Financial accounts</h1><p>One source of truth for bank, cash, e-wallet, and credit accounts.</p></div><button className="secondary-button" onClick={onAddAccount}><Plus size={17}/>Add account</button></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Financial accounts</h1><p>One source of truth for bank, cash, e-wallet, and credit accounts.</p></div><AppLink href={pagePath('accounts', null, { view: 'new' })} className="secondary-button"><Plus size={17}/>Add account</AppLink></div>
     <section className="account-filter" aria-label="Financial account filters">
       <label htmlFor="payment-method-filter"><SlidersHorizontal size={16}/><span>Payment method</span></label>
       <div className="filter-select-wrap"><select id="payment-method-filter" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}><option value="">All payment methods and accounts</option>{accountGroups.map(({ method, accounts: methodAccounts }) => <optgroup key={method.id} label={method.name}><option value={`method:${method.id}`}>All {method.name} accounts</option>{methodAccounts.map(account => <option key={`${method.id}-${account.id}`} value={`account:${account.id}`}>{account.name}</option>)}</optgroup>)}{otherAccountChoices.length > 0 && <optgroup label="Other accounts">{otherAccountChoices.map(account => <option key={account.id} value={`account:${account.id}`}>{account.name}</option>)}</optgroup>}</select><ChevronDown size={15}/></div>
@@ -1493,7 +1476,7 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
     {loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading financial accounts…</h2><p>Fetching your latest posted balances.</p></section>}
     {!loading && error && <section className="panel account-state error-state"><CircleHelp size={24}/><h2>Financial accounts could not be loaded</h2><p>{error.status === 401 ? 'Your accounting API session is not authorized. Please ask an administrator to check the shared authentication setup.' : error.message || 'Could not load financial accounts.'}</p><button className="secondary-button" onClick={() => setAuthVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section>}
     {!loading && !error && accounts.length === 0 && <section className="panel account-state"><Landmark size={24}/><h2>No financial accounts yet</h2><p>Add an account to start tracking current balances and credit limits.</p></section>}
-    {!loading && !error && accounts.length > 0 && <section className="account-cards account-list-page">{sortedAccounts.map(a => <button key={a.id} className="big-account-card" onClick={() => onSelectAccount(a.id)}><span className="account-logo large" style={{background:a.color}}>{a.initials}</span><span><small>{a.type}</small><strong>{a.name}</strong><em className="financial-account-holder">Account holder name: <b>{a.holderName}</b></em><em className="financial-account-number">Account number: <b>{a.accountNumber}</b></em></span><span className="card-balance"><small>{a.isCredit ? 'Outstanding balance' : 'Current balance'}</small><strong className={!a.isCredit && a.balance < 0 ? 'red' : ''}>{peso.format(a.currentBalance)}</strong>{a.isCredit && <em>Available {peso.format(a.availableBalance)}</em>}<em className="balance-updated">{balanceUpdatedLabel(a.balanceUpdatedAt)}</em></span><ChevronRight size={18}/></button>)}</section>}
+    {!loading && !error && accounts.length > 0 && <section className="account-cards account-list-page">{sortedAccounts.map(a => <AppLink href={pagePath('accounts', a.id)} key={a.id} className="big-account-card"><span className="account-logo large" style={{background:a.color}}>{a.initials}</span><span><small>{a.type}</small><strong>{a.name}</strong><em className="financial-account-holder">Account holder name: <b>{a.holderName}</b></em><em className="financial-account-number">Account number: <b>{a.accountNumber}</b></em></span><span className="card-balance"><small>{a.isCredit ? 'Outstanding balance' : 'Current balance'}</small><strong className={!a.isCredit && a.balance < 0 ? 'red' : ''}>{peso.format(a.currentBalance)}</strong>{a.isCredit && <em>Available {peso.format(a.availableBalance)}</em>}<em className="balance-updated">{balanceUpdatedLabel(a.balanceUpdatedAt)}</em></span><ChevronRight size={18}/></AppLink>)}</section>}
   </main>;
 }
 
@@ -1606,11 +1589,11 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
   };
 
   if (loading) return <main className="content inner-page"><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading account transactions…</h2><p>Fetching the account and its complete journal history.</p></section></main>;
-  if (error && !account) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Financial accounts</button><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account history could not be loaded</h2><p>{error.message || 'Please try again.'}</p></section></main>;
+  if (error && !account) return <main className="content inner-page"><AppLink href={pagePath('accounts')} className="back-button"><ArrowLeft size={16}/>Financial accounts</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account history could not be loaded</h2><p>{error.message || 'Please try again.'}</p></section></main>;
 
   return <main className="content inner-page account-transactions-page">
-    <button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Financial accounts</button>
-    <div className="title-row account-history-title"><div><p className="eyebrow">ACCOUNT PASSBOOK</p><h1>{account.name}</h1><p>{account.type}</p><p className="account-history-holder">Account holder name: <strong>{account.holderName}</strong></p><p className="account-history-number">Account number: <strong>{account.accountNumber}</strong></p></div><div className="account-history-actions"><button className="secondary-button" onClick={onEdit}><Pencil size={15}/>Edit details</button><button className="secondary-button" onClick={onAdjust}><SlidersHorizontal size={15}/>{account.isCredit ? 'Adjust amount due' : 'Adjust balance'}</button><span className="account-logo history-logo" style={{background:account.color}}>{account.initials}</span></div></div>
+    <AppLink href={pagePath('accounts')} className="back-button"><ArrowLeft size={16}/>Financial accounts</AppLink>
+    <div className="title-row account-history-title"><div><p className="eyebrow">ACCOUNT PASSBOOK</p><h1>{account.name}</h1><p>{account.type}</p><p className="account-history-holder">Account holder name: <strong>{account.holderName}</strong></p><p className="account-history-number">Account number: <strong>{account.accountNumber}</strong></p></div><div className="account-history-actions"><AppLink href={pagePath('accounts', accountId, { view: 'edit' })} className="secondary-button"><Pencil size={15}/>Edit details</AppLink><AppLink href={pagePath('accounts', accountId, { view: 'adjustments' })} className="secondary-button"><SlidersHorizontal size={15}/>{account.isCredit ? 'Adjust amount due' : 'Adjust balance'}</AppLink><span className="account-logo history-logo" style={{background:account.color}}>{account.initials}</span></div></div>
     <section className="account-history-summary">
       <div><span>{account.isCredit ? 'Outstanding balance' : 'Current balance'}</span><strong className={!account.isCredit && account.currentBalance < 0 ? 'red' : ''}>{peso.format(account.currentBalance)}</strong></div>
       <div><span>{account.isCredit ? 'Available credit' : 'Available balance'}</span><strong>{peso.format(account.availableBalance)}</strong></div>
@@ -1771,7 +1754,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
 
   const issue = name => fieldErrors[name] && <small className="account-field-error">{[].concat(fieldErrors[name])[0]}</small>;
   if (loading) return <main className="content inner-page"><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading account settings…</h2><p>Preparing financial account initialization details.</p></section></main>;
-  if (!form) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Account details</button><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account settings could not be loaded</h2><p>{error}</p></section></main>;
+  if (!form) return <main className="content inner-page"><AppLink href={accountId ? pagePath('accounts', accountId) : pagePath('accounts')} className="back-button"><ArrowLeft size={16}/>Account details</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account settings could not be loaded</h2><p>{error}</p></section></main>;
 
   const maskedNumber = account.masked_account_number || account.account_number_masked || 'No number saved';
   const isCreditCard = form.kind === 'credit_card';
@@ -1783,7 +1766,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
     && form.branch_ids.length > 0;
 
   return <main className="content inner-page account-edit-page">
-    <button className="back-button" onClick={onBack}><ArrowLeft size={16}/>{isCreate ? 'Financial accounts' : 'Account details'}</button>
+    <AppLink href={isCreate ? pagePath('accounts') : pagePath('accounts', accountId)} className="back-button"><ArrowLeft size={16}/>{isCreate ? 'Financial accounts' : 'Account details'}</AppLink>
     <div className="title-row"><div><p className="eyebrow">ACCOUNT SETUP</p><h1>{isCreate ? 'Create financial account' : 'Edit financial account'}</h1><p>{isCreate ? 'Initialize a financial account and choose which branches can use it.' : `Update identity, accounting, access, and transaction settings for ${account.name}.`}</p></div><span className={`edit-status-pill ${form.is_active ? 'active' : 'inactive'}`}>{form.is_active ? 'Active account' : 'Inactive account'}</span></div>
     {error && <div className="account-save-message error" role="alert"><CircleHelp size={18}/><span><strong>We couldn’t save these changes</strong>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error"><X size={15}/></button></div>}
     <form className="account-edit-layout" onSubmit={submit}>
@@ -1795,7 +1778,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
             <label>Account type<select name="kind" value={form.kind} onChange={update} required><option value="">Select account type</option>{financialAccountKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{issue('kind')}</label>
             <label>Currency<input name="currency" value={form.currency} maxLength="3" placeholder="PHP" disabled required/>{issue('currency')}</label>
             <label>Financial institution<select name="financial_institution_id" value={form.financial_institution_id} onChange={update} disabled={isCash} required={!isCash}><option value="">{isCash ? 'Not required for cash' : 'Select institution'}</option>{institutions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{issue('financial_institution_id')}</label>
-            <label>Account holder<select name="account_holder" value={form.account_holder} onChange={update}><option value="">No account holder</option>{userAccounts.map(item => <option key={item.id} value={item.id}>{item.name}{item.code ? ` — ${item.code}` : ''}</option>)}</select><small className="account-field-help">Only active user accounts can be assigned.</small>{issue('account_holder')}</label>
+            <label>Account holder<select name="account_holder" value={form.account_holder} onChange={update}><option value="">No account holder</option>{userAccounts.map(item => <option key={item.id} value={item.id}>{item.name || item.display_name || `User account ${item.id}`}</option>)}</select><small className="account-field-help">Only active user accounts can be assigned.</small>{issue('account_holder')}</label>
             <label className="span-2">Account number<input name="account_number" value={form.account_number} onChange={update} maxLength="100" placeholder={isCreate ? (isCash ? 'Optional for cash accounts' : 'Enter account number') : `Current: ${maskedNumber}`} required={isCreate && !isCash}/>{!isCreate && <small className="account-field-help">Leave blank to keep the encrypted account number. Enter a new value only when replacing it.</small>}{issue('account_number')}</label>
             <label className="span-2">Description<textarea name="description" value={form.description} onChange={update} maxLength="255" rows="3" placeholder="What this account is used for"/>{issue('description')}</label>
           </div>
@@ -1833,7 +1816,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
         <label className="account-active-toggle"><input type="checkbox" name="is_active" checked={form.is_active} onChange={update}/><span><strong>Account is active</strong><small>Inactive accounts remain in history but cannot be used for new transactions.</small></span></label>
         {issue('is_active')}
         <button type="submit" className="primary-button wide account-save-button" disabled={!canSubmit || saving}>{saving ? <><RefreshCw className="spin" size={16}/>{isCreate ? 'Creating account…' : 'Saving changes…'}</> : <><Save size={16}/>{isCreate ? 'Create financial account' : 'Save account details'}</>}</button>
-        <button type="button" className="text-button wide" onClick={onBack} disabled={saving}>Cancel</button>
+        <AppLink href={isCreate ? pagePath('accounts') : pagePath('accounts', accountId)} className="text-button wide" disabled={saving}>Cancel</AppLink>
         <p className="account-security-note"><ShieldCheck size={14}/>Account numbers are encrypted and only the last four digits are returned by the API.</p>
       </aside>
     </form>
@@ -1960,12 +1943,12 @@ function FinancialAccountAdjustmentsPage({ accountId, onBack }) {
     }
   };
 
-  if (loading) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Account history</button><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading balance adjustments…</h2><p>Fetching the account balance and audit history.</p></section></main>;
-  if (!account) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Account history</button><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Adjustment page could not be loaded</h2><p>{error || 'Financial account not found.'}</p></section></main>;
+  if (loading) return <main className="content inner-page"><AppLink href={pagePath('accounts', accountId)} className="back-button"><ArrowLeft size={16}/>Account history</AppLink><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading balance adjustments…</h2><p>Fetching the account balance and audit history.</p></section></main>;
+  if (!account) return <main className="content inner-page"><AppLink href={pagePath('accounts', accountId)} className="back-button"><ArrowLeft size={16}/>Account history</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Adjustment page could not be loaded</h2><p>{error || 'Financial account not found.'}</p></section></main>;
   if (account.isCredit) return <CreditCardAdjustmentsPage cardId={accountId} onBack={onBack}/>;
 
   return <main className="content inner-page credit-adjustments-page financial-adjustments-page">
-    <div className="credit-adjustment-pagebar"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Account history</button><div><p className="eyebrow">BALANCE RECONCILIATION</p><h1>Financial account adjustments</h1><p>Match MDR Accounting with the balance reported by the bank, cash count, or wallet.</p></div><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={15}/>Refresh</button></div>
+    <div className="credit-adjustment-pagebar"><AppLink href={new URLSearchParams(window.location.search).get('from') === 'credit-card' ? pagePath('credit-cards', accountId, { asOf: new URLSearchParams(window.location.search).get('as_of') }) : pagePath('accounts', accountId)} className="back-button"><ArrowLeft size={16}/>Account history</AppLink><div><p className="eyebrow">BALANCE RECONCILIATION</p><h1>Financial account adjustments</h1><p>Match MDR Accounting with the balance reported by the bank, cash count, or wallet.</p></div><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={15}/>Refresh</button></div>
     {error && <div className="payment-form-error adjustment-page-error" role="alert"><CircleHelp size={15}/><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss"><X size={14}/></button></div>}
     <section className="adjustment-context panel">
       <div><span>Financial account</span><strong>{account.name}</strong><small>{account.type} · {account.accountNumber}</small></div>
@@ -2150,7 +2133,7 @@ function CreditCardsPage({ onSelectCard }) {
         : status === 'DUE_TODAY' ? 'Payment is due today'
         : status === 'NO_AMOUNT_DUE' ? 'Nothing currently due'
         : `${Number(card.days_until_due || 0)} day${Number(card.days_until_due || 0) === 1 ? '' : 's'} remaining`;
-      return <article className={`credit-card-panel panel credit-card-clickable status-${status.toLowerCase()}`} key={card.id} role="button" tabIndex="0" onClick={() => onSelectCard(card.id, asOf)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelectCard(card.id, asOf); } }} aria-label={`View ${card.name} details`}>
+      return <AppLink href={pagePath('credit-cards', card.id, { asOf })} className={`credit-card-panel panel credit-card-clickable status-${status.toLowerCase()}`} key={card.id} aria-label={`View ${card.name} details`}>
         <div className="credit-card-heading"><div className="credit-card-identity"><span className="credit-card-icon"><CreditCard size={20}/></span><div><span className="credit-card-kicker">{identity.institutionName}</span><h2>{identity.accountName}</h2><div className="credit-card-holder"><span>Account holder name</span><strong>{identity.accountHolderName}</strong></div><div className="credit-card-identifiers"><span>{identity.accountNumber}</span><span>{card.currency || 'PHP'}</span></div></div></div><span className={`due-status ${status.toLowerCase()}`}>{dueStatusLabels[status] || humanize(status)}</span></div>
         <div className="credit-card-body">
           <div className="credit-card-balance"><span>Outstanding balance</span><strong>{money(card.outstanding_balance, card.currency)}</strong><div className="utilization-track"><span style={{ width: `${utilization}%` }}/></div><small>{utilization.toFixed(0)}% of {money(card.credit_limit, card.currency)} limit used</small></div>
@@ -2158,7 +2141,7 @@ function CreditCardsPage({ onSelectCard }) {
           <dl className="credit-card-metrics"><div><dt>Amount due</dt><dd>{money(card.amount_due, card.currency)}</dd></div><div><dt>Next due amount</dt><dd>{money(card.next_due_amount, card.currency)}</dd></div><div><dt>Available credit</dt><dd>{money(card.available_credit, card.currency)}</dd></div><div><dt>Next closing date</dt><dd>{calendarDate(card.next_closing_date)}</dd></div><div><dt>Statement day</dt><dd>Day {card.statement_day ?? '—'}</dd></div><div><dt>Due day</dt><dd>Day {card.due_day ?? '—'}</dd></div></dl>
         </div>
         <div className="statement-section"><div className="statement-heading"><div><h3>Unpaid statements</h3><p>Open balances contributing to the amount due</p></div><span>{statements.length} open</span></div>{statements.length === 0 ? <div className="no-statements"><Check size={16}/>No unpaid statements</div> : <div className="statement-table"><div className="statement-row statement-head"><span>Statement</span><span>Statement date</span><span>Due date</span><span>Minimum due</span><span>Balance due</span><span>Status</span></div>{statements.map(statement => <div className="statement-row" key={statement.id}><span><strong>{statement.number}</strong><small>Total {money(statement.total_amount, card.currency)}</small></span><span>{calendarDate(statement.statement_date)}</span><span>{calendarDate(statement.due_date)}</span><span>{money(statement.minimum_due, card.currency)}</span><span><strong>{money(statement.balance_due, card.currency)}</strong><small>{money(statement.paid_amount, card.currency)} paid</small></span><span><span className={`history-status ${String(statement.status || '').toLowerCase()}`}>{humanize(statement.status || 'Open')}</span></span></div>)}</div>}<div className="card-detail-link">View full history and prepare a payment <ChevronRight size={15}/></div></div>
-      </article>;
+      </AppLink>;
     })}</section>}
   </main>;
 }
@@ -2252,8 +2235,8 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
     return () => { current = false; };
   }, [branchId, cardId, paymentMethodId]);
 
-  if (loading) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit cards</button><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading card details…</h2><p>Fetching statements and their applied payments.</p></section></main>;
-  if (error || !card) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit cards</button><section className="panel account-state error-state"><CircleHelp size={24}/><h2>{error?.status === 404 ? 'Credit card not found' : 'Card details could not be loaded'}</h2><p>{error?.status === 404 ? 'This account is not a credit card or no longer exists.' : error?.message || 'Please try again.'}</p><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section></main>;
+  if (loading) return <main className="content inner-page"><AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading card details…</h2><p>Fetching statements and their applied payments.</p></section></main>;
+  if (error || !card) return <main className="content inner-page"><AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>{error?.status === 404 ? 'Credit card not found' : 'Card details could not be loaded'}</h2><p>{error?.status === 404 ? 'This account is not a credit card or no longer exists.' : error?.message || 'Please try again.'}</p><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section></main>;
 
   const currency = card.currency || 'PHP';
   const identity = creditCardIdentity(card);
@@ -2309,7 +2292,7 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
   };
 
   return <main className="content inner-page card-detail-page">
-    <div className="credit-detail-pagebar"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit cards</button><strong>Credit card details</strong><label>As of <input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}/></label></div>
+    <div className="credit-detail-pagebar"><AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink><strong>Credit card details</strong><label>As of <input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}/></label></div>
     <section className="credit-visual-card">
       <div className="visual-card-top"><div><span>{identity.institutionName}</span><h1>{identity.accountName}</h1><div className="visual-card-holder"><small>Account holder name</small><strong>{identity.accountHolderName}</strong></div><div className="visual-card-account-meta"><small>{identity.accountNumber}</small></div></div><span className="visual-card-currency">{currency}</span></div>
       <div className="visual-card-balances"><span>Outstanding balance<strong>{money(card.outstanding_balance, currency)}</strong></span><span>Total amount due<strong>{money(card.amount_due, currency)}</strong></span><span>Due date<strong>{calendarDate(card.nearest_due_date, 'No due date')}</strong></span></div>
@@ -2320,7 +2303,7 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
       <button onClick={() => openDetailSection(detailTab, 'card-payment')}><span><Banknote size={22}/></span><strong>Pay</strong><small>Make a payment</small></button>
       <button onClick={() => openDetailSection('history', 'card-tabs')}><span><ReceiptText size={22}/></span><strong>Statements</strong><small>{statements.length} records</small></button>
       <button onClick={() => openDetailSection('history', 'card-tabs')}><span><Activity size={22}/></span><strong>History</strong><small>{totalPayments} payments</small></button>
-      <button onClick={() => onAdjust(asOf)}><span><SlidersHorizontal size={22}/></span><strong>Adjust</strong><small>Match actual SOA</small></button>
+      <AppLink href={pagePath('accounts', cardId, { view: 'adjustments', asOf, from: 'credit-card' })}><span><SlidersHorizontal size={22}/></span><strong>Adjust</strong><small>Match actual SOA</small></AppLink>
       <button onClick={() => openDetailSection('information', 'card-tabs')}><span><CreditCard size={22}/></span><strong>Information</strong><small>Card details</small></button>
     </nav>
 
@@ -2514,11 +2497,11 @@ function CreditCardAdjustmentsPage({ cardId, onBack }) {
     }
   };
 
-  if (loading) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit card details</button><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading adjustments…</h2><p>Fetching the card balance and adjustment audit trail.</p></section></main>;
-  if (!card) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit card details</button><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Adjustment page could not be loaded</h2><p>{error || 'Credit card not found.'}</p></section></main>;
+  if (loading) return <main className="content inner-page"><AppLink href={pagePath('credit-cards', cardId, { asOf })} className="back-button"><ArrowLeft size={16}/>Credit card details</AppLink><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading adjustments…</h2><p>Fetching the card balance and adjustment audit trail.</p></section></main>;
+  if (!card) return <main className="content inner-page"><AppLink href={pagePath('credit-cards', cardId, { asOf })} className="back-button"><ArrowLeft size={16}/>Credit card details</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Adjustment page could not be loaded</h2><p>{error || 'Credit card not found.'}</p></section></main>;
 
   return <main className="content inner-page credit-adjustments-page">
-    <div className="credit-adjustment-pagebar"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Credit card details</button><div><p className="eyebrow">CREDIT CARD CONTROL</p><h1>Balance and due adjustments</h1><p>Reconcile the portal with the card issuer's actual statement.</p></div><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={15}/>Refresh</button></div>
+    <div className="credit-adjustment-pagebar"><AppLink href={pagePath('credit-cards', cardId, { asOf })} className="back-button"><ArrowLeft size={16}/>Credit card details</AppLink><div><p className="eyebrow">CREDIT CARD CONTROL</p><h1>Balance and due adjustments</h1><p>Reconcile the portal with the card issuer's actual statement.</p></div><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={15}/>Refresh</button></div>
     {error && <div className="payment-form-error adjustment-page-error" role="alert"><CircleHelp size={15}/><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss"><X size={14}/></button></div>}
     <section className="adjustment-context panel">
       <div><span>Credit card</span><strong>{card.name}</strong><small>{creditCardIdentity(card).accountNumber}</small></div>
@@ -2601,6 +2584,63 @@ function loanUserAccountName(loan = {}) {
   const account = loan.financial_account || loan.financialAccount || {};
   const userAccount = loan.user_account || loan.userAccount || account.user_account || account.userAccount || {};
   return loan.user_account_name || loan.userAccountName || userAccount.name || userAccount.display_name || userAccount.username || account.user_account_name || '';
+}
+
+function loanInstallmentSummary(loan = {}) {
+  const installment = loan.next_installment || loan.nextInstallment || loan.upcoming_installment || loan.upcomingInstallment || loan.next_due || loan.nextDue || {};
+  const total = Number(
+    installment.term_months
+    ?? installment.total_installments
+    ?? loan.term_months
+    ?? loan.installments_count
+    ?? loan.total_installments
+    ?? loan.schedule_count
+    ?? 0,
+  );
+  let number = Number(
+    installment.installment_number
+    ?? installment.number
+    ?? loan.next_installment_number
+    ?? loan.current_installment_number
+    ?? loan.installment_number
+    ?? 0,
+  );
+  if (!number && loan.paid_installments_count != null) number = Number(loan.paid_installments_count) + 1;
+  if (!number && loan.completed_installments_count != null) number = Number(loan.completed_installments_count) + 1;
+  if (!number && loan.first_due_date && loan.next_due_date) {
+    const first = new Date(`${loan.first_due_date}T00:00:00`);
+    const next = new Date(`${loan.next_due_date}T00:00:00`);
+    number = ((next.getFullYear() - first.getFullYear()) * 12) + next.getMonth() - first.getMonth() + 1;
+  }
+  if (['paid', 'settled', 'completed'].includes(String(loan.status || '').toLowerCase()) && total) number = total;
+  if (total) number = Math.min(total, Math.max(1, number || 1));
+
+  const exactPrincipal = installment.principal_due
+    ?? installment.principal_amount
+    ?? installment.principal
+    ?? loan.next_principal_due
+    ?? loan.next_due_principal
+    ?? loan.installment_principal_amount;
+  const exactInterest = installment.interest_due
+    ?? installment.interest_amount
+    ?? installment.interest
+    ?? loan.next_interest_due
+    ?? loan.next_due_interest
+    ?? loan.installment_interest_amount;
+  const principal = exactPrincipal != null
+    ? Number(exactPrincipal)
+    : total ? Number(loan.principal_amount || 0) / total : 0;
+  const interest = exactInterest != null
+    ? Number(exactInterest)
+    : total ? Number(loan.total_interest_amount ?? loan.interest_amount ?? loan.total_interest ?? 0) / total : 0;
+
+  return {
+    number: number || null,
+    total: total || null,
+    principal,
+    interest,
+    complete: ['paid', 'settled', 'completed'].includes(String(loan.status || '').toLowerCase()),
+  };
 }
 
 function loanErrorMessage(error, fallback) {
@@ -3003,8 +3043,8 @@ function LoanDetailPage({ loanId, onBack }) {
     if (!window.confirm('Cancel this loan? This is only allowed before any payments are recorded.')) return;
     try { await accountingApi.cancelLoan(loanId); setRefreshVersion(value => value + 1); } catch (requestError) { setError(loanErrorMessage(requestError, 'Loan could not be cancelled.')); }
   };
-  if (loading) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Back to loans</button><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading loan…</strong></section></main>;
-  if (error && !loan) return <main className="content inner-page"><button className="back-button" onClick={onBack}><ArrowLeft size={16}/>Back to loans</button><section className="panel transaction-state error-state"><CircleHelp size={22}/><strong>Unable to load loan</strong><span>{error}</span></section></main>;
+  if (loading) return <main className="content inner-page"><AppLink href={pagePath('loans')} className="back-button"><ArrowLeft size={16}/>Back to loans</AppLink><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading loan…</strong></section></main>;
+  if (error && !loan) return <main className="content inner-page"><AppLink href={pagePath('loans')} className="back-button"><ArrowLeft size={16}/>Back to loans</AppLink><section className="panel transaction-state error-state"><CircleHelp size={22}/><strong>Unable to load loan</strong><span>{error}</span></section></main>;
   const installments = loan?.installments || [];
   const loanPaymentEntries = Array.isArray(loan?.payment_entries) ? loan.payment_entries : (loan?.payments || []);
   const paidTotal = loan?.amount_paid != null
@@ -3020,8 +3060,8 @@ function LoanDetailPage({ loanId, onBack }) {
   };
   return <main className="content inner-page loan-detail-page">
 <div className="loan-detail-top">
-<button className="back-button" onClick={onBack}>
-<ArrowLeft size={16}/>Back to loans</button>
+<AppLink href={pagePath('loans')} className="back-button">
+<ArrowLeft size={16}/>Back to loans</AppLink>
 <label>Balance as of<input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}/>
 </label>
 </div>{error && <div className="loan-message error">
@@ -3271,8 +3311,8 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 <h1>Loan list</h1>
 <p>Manage borrowed loans, installment schedules, and upcoming payments.</p>
 </div>
-<button className="primary-button" onClick={() => setCreateOpen(true)}>
-<Plus size={17}/>New loan</button>
+<AppLink href={pagePath('loans', null, { view: 'new' })} className="primary-button">
+<Plus size={17}/>New loan</AppLink>
 </div>
 <section className="loan-overview">
 <article className="loan-overview-feature">
@@ -3355,6 +3395,7 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 <div className="loan-list-row loan-list-head">
 <span>Loan / Funding</span>
 <span>User account</span>
+<span>Installment</span>
 <span>Principal amount</span>
 <span>Total interest</span>
 <span>Next due date</span>
@@ -3362,7 +3403,7 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 <span>Remaining balance</span>
 <span>Status</span>
 <span/>
-</div>{visible.map(loan => { const hasLate = Number(loan.overdue_interest_balance || 0) > 0 || Number(loan.overdue_installment_count || 0) > 0; const userAccountName = loanUserAccountName(loan); const partyName = loanParty(loan); const fundingName = loanAccount(loan); const showFundingName = fundingName && fundingName.toLowerCase() !== partyName.toLowerCase(); const dueNotice = loanDueNotice(loan.next_due_date); return <button className="loan-list-row" key={loan.id} onClick={() => onSelectLoan(loan.id)}>
+</div>{visible.map(loan => { const hasLate = Number(loan.overdue_interest_balance || 0) > 0 || Number(loan.overdue_installment_count || 0) > 0; const userAccountName = loanUserAccountName(loan); const installment = loanInstallmentSummary(loan); const partyName = loanParty(loan); const fundingName = loanAccount(loan); const showFundingName = fundingName && fundingName.toLowerCase() !== partyName.toLowerCase(); const dueNotice = loanDueNotice(loan.next_due_date); return <AppLink href={pagePath('loans', loan.id)} className="loan-list-row" key={loan.id}>
 <span className="loan-person">
 <i>
 <UserRound size={16}/>
@@ -3374,6 +3415,10 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 </span>
 <span className="loan-user-account-cell">
 {userAccountName ? <><span><UserRound size={12}/><strong>{userAccountName}</strong></span><small>Linked user account</small></> : <small>Not applicable</small>}
+</span>
+<span className={`loan-installment-cell ${installment.complete ? 'complete' : ''}`}>
+<strong>{installment.number ? `#${installment.number}${installment.total ? ` of ${installment.total}` : ''}` : '—'}</strong>
+{installment.number ? <><small>{money(installment.principal, loan.currency)} principal</small><small>{money(installment.interest, loan.currency)} interest</small></> : <small>No schedule</small>}
 </span>
 <span className="loan-total-cell">
 <strong>{money(loan.principal_amount, loan.currency)}</strong>
@@ -3400,7 +3445,7 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 <em className={`loan-state ${hasLate && loan.status === 'active' ? 'overdue' : loan.status}`}>{hasLate && loan.status === 'active' ? `${loan.overdue_installment_count || ''} Overdue`.trim() : humanize(loan.status)}</em>
 </span>
 <ChevronRight className="loan-list-chevron" size={17}/>
-</button>; })}</div>}{!loading && !error && lastPage > 1 && <div className="transfer-pagination">
+</AppLink>; })}</div>}{!loading && !error && lastPage > 1 && <div className="transfer-pagination">
 <button type="button" className="secondary-button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1}>
 <ArrowLeft size={15}/>Previous</button>
 <span>Page {page} of {lastPage}</span>
@@ -3509,7 +3554,7 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
     });
   };
   return <main className="content inner-page loans-page loan-dues-page">
-    <div className="title-row"><div><p className="eyebrow">LOANS</p><h1>Upcoming dues</h1><p>Review overdue installments and payments coming due across every active loan.</p></div><button className="primary-button" onClick={onAddLoan}><Plus size={17}/>Add loan</button></div>
+    <div className="title-row"><div><p className="eyebrow">LOANS</p><h1>Upcoming dues</h1><p>Review overdue installments and payments coming due across every active loan.</p></div><AppLink href={pagePath('loans', null, { view: 'new' })} className="primary-button"><Plus size={17}/>Add loan</AppLink></div>
     <section className="loan-overview loan-due-overview">
       <article className="loan-overview-feature"><span><CalendarDays size={18}/>{calendarDate(result.day_from || filters.day_from)} – {calendarDate(result.day_to || filters.day_to)}</span><strong>{money(result.total_amount_due, currency)}</strong><small>{result.total_installments || 0} unpaid installment{Number(result.total_installments) === 1 ? '' : 's'}</small></article>
       <article className="loan-due-overdue-card"><span>Overdue</span><strong className={Number(result.overdue_count) ? 'red' : ''}>{money(result.overdue_amount, currency)}</strong><small>{result.overdue_count || 0} overdue installment{Number(result.overdue_count) === 1 ? '' : 's'}</small></article>
@@ -3527,7 +3572,7 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
           const methods = [...new Set((item.payment_entries || []).map(entry => entry.payment_method?.name || entry.payment_method_name).filter(Boolean))];
           const dueNotice = loanDueNotice(item.due_date, filters.as_of_date);
           const funding = [...new Set([item.financial_institution, item.financial_account].filter(Boolean))].join(' · ') || humanize(item.funding_type || 'Account');
-          return <button key={item.id} className={`loan-due-row ${item.is_overdue ? 'overdue' : dueNotice.className}`} onClick={() => onSelectLoan(item.loan_id)}>
+          return <AppLink href={pagePath('loans', item.loan_id)} key={item.id} className={`loan-due-row ${item.is_overdue ? 'overdue' : dueNotice.className}`}>
             <span className="loan-due-date"><strong>{new Date(`${item.due_date}T00:00:00`).toLocaleDateString('en-PH', { day: '2-digit' })}</strong><small>{new Date(`${item.due_date}T00:00:00`).toLocaleDateString('en-PH', { month: 'short' }).toUpperCase()}</small><em>{dueNotice.label}</em></span>
             <span className="loan-due-identity" title={item.loan_number}><strong><b>ID {item.loan_id}</b>{item.party}</strong><small>{funding}</small><small>{money(item.total_loan_amount, item.currency)} total · {money(item.loan_paid_amount, item.currency)} paid · {money(item.loan_balance_amount, item.currency)} balance</small></span>
             <span className="loan-due-user">{item.user_account_name ? <><strong><UserRound size={11}/>{item.user_account_name}</strong><small>Linked user account</small></> : <><strong>Not applicable</strong><small>No linked user</small></>}</span>
@@ -3536,7 +3581,7 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
             <span className={Number(item.overdue_interest_due) > 0 ? 'loan-due-charges red' : 'loan-due-charges'}><strong>{money(item.overdue_interest_due, item.currency)}</strong><small>Overdue interest</small>{Number(item.overpayment_amount) > 0 && <small>{money(item.overpayment_amount, item.currency)} overpayment</small>}</span>
             <span className="loan-due-total"><strong>{money(item.amount_due, item.currency)}</strong><small><em className={`installment-status ${item.status}`}>{humanize(item.status)}</em></small></span>
             <ChevronRight size={16}/>
-          </button>;
+          </AppLink>;
         })}
       </div>}
     </section>
@@ -3550,7 +3595,10 @@ function LoansPage({ view = 'list', selectedLoanId, onSelectLoan, onBack, onAddL
 }
 
 function PlaceholderPage({ active }) {
-  const meta = navGroups.flatMap(g=>g.items).find(i=>i.id===active);
+  const meta = navGroups.flatMap(g=>g.items).find(i=>i.id===active) || {
+    label: standalonePageTitles[active] || 'Accounting',
+    icon: active === 'help' ? CircleHelp : active === 'settings' ? Settings : FileBarChart,
+  };
   const Icon = meta?.icon || FileBarChart;
   return <main className="content inner-page"><div className="title-row"><div><p className="eyebrow">ACCOUNTING</p><h1>{meta?.label}</h1><p>Centralized records with branch, account, source document, status, and journal references.</p></div><button className="secondary-button"><Download size={17}/>Export</button></div><section className="panel empty-state"><div className="empty-icon"><Icon size={26}/></div><h2>{meta?.label} workspace</h2><p>This module is connected to the centralized accounting API and ready for live records.</p><div className="empty-features"><span><Check size={15}/>Audit-safe history</span><span><Check size={15}/>Branch filters</span><span><Check size={15}/>CSV export</span></div><button className="primary-button"><Plus size={17}/>Create record</button></section></main>;
 }
@@ -3599,8 +3647,7 @@ function LoginPage({ mode, onModeChange, onAuthenticated }) {
       if (!response?.token) throw new Error('The server did not return an access token.');
       const user = response.user;
       if (!user) throw new Error('The server did not return the user profile.');
-      sessionStorage.setItem('accounting_token', response.token);
-      sessionStorage.setItem('accounting_user', JSON.stringify(user));
+      authSession.save(response.token, user);
       onAuthenticated(user);
     } catch (requestError) {
       const validationMessage = requestError.details && Object.values(requestError.details).flat()[0];
@@ -3620,7 +3667,7 @@ function LoginPage({ mode, onModeChange, onAuthenticated }) {
     <section className="login-panel">
       <div className="login-card">
         <div className="login-mobile-brand"><Logo/></div>
-        <div className="auth-tabs"><button className={!isRegister ? 'active' : ''} onClick={() => onModeChange('login')}>Sign in</button><button className={isRegister ? 'active' : ''} onClick={() => onModeChange('register')}>Create account</button></div>
+        <div className="auth-tabs"><AppLink href="/login" className={!isRegister ? 'active' : ''}>Sign in</AppLink><AppLink href="/register" className={isRegister ? 'active' : ''}>Create account</AppLink></div>
         <div className="login-heading"><span className="secure-label"><LockKeyhole size={13}/>{isRegister ? 'NEW ACCOUNT' : 'SECURE ACCESS'}</span><h2>{isRegister ? 'Join the workspace' : 'Welcome back'}</h2><p>{isRegister ? 'Create your Accounting Portal profile. New accounts begin with viewer access.' : 'Sign in with your accounting username or email.'}</p></div>
         <form className="portal-login-form" onSubmit={submit}>
           {isRegister ? <>
@@ -3647,52 +3694,25 @@ function LoginPage({ mode, onModeChange, onAuthenticated }) {
 }
 
 function App() {
-  const [session, setSession] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('accounting_user')); } catch { return null; }
-  });
+  const [session, setSession] = useState(() => authSession.user());
+  const [sessionReady, setSessionReady] = useState(() => Boolean(authSession.token() && authSession.user()));
+  const authTabBridge = useRef(null);
   const [authMode, setAuthMode] = useState(() => window.location.pathname === '/register' ? 'register' : 'login');
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [active, setActive] = useState(() => pageFromPath(window.location.pathname));
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const navigate = (page, resourceId = null, options = {}) => {
-    let path = pagePaths[page] || '/';
-    if (page === 'user-accounts' && options.view === 'new') {
-      path = '/user-accounts/new';
-    } else if (page === 'user-accounts' && resourceId != null) {
-      path = `/user-accounts/${encodeURIComponent(resourceId)}${options.view === 'edit' ? '/edit' : ''}`;
-    } else if (page === 'accounts' && options.view === 'new') {
-      path = '/financial-accounts/new';
-    } else if (page === 'accounts' && resourceId != null) {
-      const accountView = options.view === 'adjustments' ? '/adjustments' : options.view === 'edit' ? '/edit' : '';
-      path = `/financial-accounts/${encodeURIComponent(resourceId)}${accountView}`;
-      const params = new URLSearchParams();
-      if (options.asOf) params.set('as_of', options.asOf);
-      if (options.from) params.set('from', options.from);
-      if (params.size) path += `?${params.toString()}`;
-    }
-    if (page === 'credit-cards' && resourceId != null) {
-      path = `/credit-cards/${encodeURIComponent(resourceId)}${options.view === 'adjustments' ? '/adjustments' : ''}`;
-      if (options.asOf) path += `?as_of=${encodeURIComponent(options.asOf)}`;
-    }
-    if (page === 'loans' && options.view === 'new') path = '/loans/new';
-    else if (page === 'loans' && options.view === 'upcoming') path = '/loans/upcoming';
-    else if (page === 'loans' && resourceId != null) path = `/loans/${encodeURIComponent(resourceId)}`;
-    if (page === 'expenses') {
-      const expenseView = ['chart-accounts', 'types', 'categories', 'items', 'ledger', 'approvals'].includes(options.view)
-        ? options.view
-        : 'ledger';
-      path = `/expenses/${expenseView}`;
-    }
-    if (`${window.location.pathname}${window.location.search}` !== path) window.history.pushState({}, '', path);
-    setCurrentPath(path.split('?')[0]);
-    setActive(page);
+    visitPath(pagePath(page, resourceId, options));
   };
 
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
       setActive(pageFromPath(window.location.pathname));
+      if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+        setAuthMode(window.location.pathname === '/register' ? 'register' : 'login');
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -3700,18 +3720,28 @@ function App() {
 
   useEffect(() => {
     const clearExpiredSession = () => {
-      sessionStorage.removeItem('accounting_token');
-      sessionStorage.removeItem('accounting_user');
+      authSession.clear();
       setSession(null);
+      setSessionReady(true);
+      authTabBridge.current?.announceClear();
     };
+    authTabBridge.current = createAuthTabBridge({
+      onSession: user => setSession(user),
+      onClear: () => setSession(null),
+      onReady: () => setSessionReady(true),
+    });
     window.addEventListener('accounting:unauthorized', clearExpiredSession);
-    return () => window.removeEventListener('accounting:unauthorized', clearExpiredSession);
+    return () => {
+      window.removeEventListener('accounting:unauthorized', clearExpiredSession);
+      authTabBridge.current?.close();
+      authTabBridge.current = null;
+    };
   }, []);
 
   const logout = async () => {
     try { await authApi.logout(); } catch { /* Clear the local session even if the token already expired. */ }
-    sessionStorage.removeItem('accounting_token');
-    sessionStorage.removeItem('accounting_user');
+    authSession.clear();
+    authTabBridge.current?.announceClear();
     setSession(null);
   };
 
@@ -3794,13 +3824,17 @@ function App() {
   }, [active, currentPath, session]);
   const changeAuthMode = nextMode => {
     const nextPath = nextMode === 'register' ? '/register' : '/login';
-    window.history.replaceState({}, '', nextPath);
+    visitPath(nextPath, { replace: true });
     setAuthMode(nextMode);
   };
   const completeAuthentication = user => {
     setSession(user);
+    setSessionReady(true);
+    const token = authSession.token();
+    if (token) authTabBridge.current?.announce(token, user);
     navigate('dashboard');
   };
+  if (!sessionReady) return <main className="login-page auth-session-loading" aria-label="Restoring accounting session"><RefreshCw className="spin" size={24}/><span>Restoring your session…</span></main>;
   if (!session) return <LoginPage mode={authMode} onModeChange={changeAuthMode} onAuthenticated={completeAuthentication}/>;
   return <div className="app-shell"><Sidebar active={active} currentPath={currentPath} setActive={navigate} open={menuOpen} close={()=>setMenuOpen(false)} user={session} onLogout={logout}/><div className="main-shell"><Header active={active} onMenu={()=>setMenuOpen(true)} onNew={()=>setModalOpen(true)}/>{page}</div>{modalOpen && <NewTransactionModal close={()=>setModalOpen(false)}/>}</div>;
 }

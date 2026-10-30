@@ -1,7 +1,9 @@
+import { authSession } from './auth-session.js';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 async function request(path, options = {}) {
-  const token = import.meta.env.VITE_API_TOKEN || sessionStorage.getItem('accounting_token');
+  const token = import.meta.env.VITE_API_TOKEN || authSession.token();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {

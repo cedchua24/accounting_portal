@@ -4,6 +4,7 @@ import {
   ReceiptText, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import { accountingApi } from './api.js';
+import { AppLink, pagePath } from './navigation.jsx';
 
 const setupViews = [
   ['chart-accounts', 'Chart of Accounts', Landmark],
@@ -165,7 +166,7 @@ function setupHierarchy(payload) {
 
 function ExpenseSectionNav({ active, onNavigate }) {
   return <div className="expense-section-nav" aria-label="Expense sections">
-    {setupViews.map(([id, label, Icon]) => <button type="button" key={id} className={active === id || (active === 'approvals' && id === 'ledger') ? 'active' : ''} onClick={() => onNavigate?.(id)}><Icon size={15}/><span>{label}</span></button>)}
+    {setupViews.map(([id, label, Icon]) => <AppLink href={pagePath('expenses', null, { view: id })} key={id} className={active === id || (active === 'approvals' && id === 'ledger') ? 'active' : ''}><Icon size={15}/><span>{label}</span></AppLink>)}
   </div>;
 }
 
@@ -479,8 +480,8 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <p>{approvalOnly ? 'Review manual expense requests without changing system-generated entries.' : 'Manual expenses and automatic bank, credit-card, and borrowed-loan interest in one ledger.'}</p>
 </div>
 <div className="expense-title-actions">
-<button type="button" className={!approvalOnly ? 'expense-view-button active' : 'expense-view-button'} onClick={() => onNavigate?.('ledger')}>Ledger</button>
-<button type="button" className={approvalOnly ? 'expense-view-button active' : 'expense-view-button'} onClick={() => onNavigate?.('approvals')}>Pending approvals{pending > 0 && <em>{pending}</em>}</button>
+<AppLink href={pagePath('expenses', null, { view: 'ledger' })} className={!approvalOnly ? 'expense-view-button active' : 'expense-view-button'}>Ledger</AppLink>
+<AppLink href={pagePath('expenses', null, { view: 'approvals' })} className={approvalOnly ? 'expense-view-button active' : 'expense-view-button'}>Pending approvals{pending > 0 && <em>{pending}</em>}</AppLink>
 <button type="button" className="icon-button" onClick={() => setVersion(value => value + 1)} aria-label="Refresh expenses">
 <RefreshCw className={loading ? 'spin' : ''} size={17}/>
 </button>

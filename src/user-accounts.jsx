@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { accountingApi } from './api.js';
 import './user-accounts.css';
+import { AppLink, pagePath } from './navigation.jsx';
 
 const peso = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -204,7 +205,7 @@ function UserAccountsList({ onCreate, onView }) {
         <h1>User accounts</h1>
         <p>Manage the people and companies connected to financial accounts and loans.</p>
       </div>
-      <button className="primary-button" type="button" onClick={onCreate}><Plus size={17}/>New user account</button>
+      <AppLink href={pagePath('user-accounts', null, { view: 'new' })} className="primary-button"><Plus size={17}/>New user account</AppLink>
     </div>
 
     <section className="ua-summary" aria-label="User account summary">
@@ -230,18 +231,18 @@ function UserAccountsList({ onCreate, onView }) {
 
       {loading && <div className="ua-state"><RefreshCw className="spin" size={23}/><strong>Loading user accounts…</strong><span>Fetching the latest directory records.</span></div>}
       {!loading && error && <div className="ua-state error"><CircleHelp size={25}/><strong>User accounts could not be loaded</strong><span>{error.message || 'Please try again.'}</span><button className="secondary-button" type="button" onClick={() => setReloadKey(value => value + 1)}><RotateCcw size={15}/>Try again</button></div>}
-      {!loading && !error && records.length === 0 && <div className="ua-state empty"><Users size={26}/><strong>{hasFilters ? 'No matching user accounts' : 'Your directory is empty'}</strong><span>{hasFilters ? 'Try a different search or clear the filters.' : 'Create the first user account to link it with financial accounts and loans.'}</span>{hasFilters ? <button className="secondary-button" type="button" onClick={clearFilters}><X size={15}/>Clear filters</button> : <button className="primary-button" type="button" onClick={onCreate}><Plus size={15}/>New user account</button>}</div>}
+      {!loading && !error && records.length === 0 && <div className="ua-state empty"><Users size={26}/><strong>{hasFilters ? 'No matching user accounts' : 'Your directory is empty'}</strong><span>{hasFilters ? 'Try a different search or clear the filters.' : 'Create the first user account to link it with financial accounts and loans.'}</span>{hasFilters ? <button className="secondary-button" type="button" onClick={clearFilters}><X size={15}/>Clear filters</button> : <AppLink href={pagePath('user-accounts', null, { view: 'new' })} className="primary-button"><Plus size={15}/>New user account</AppLink>}</div>}
 
       {!loading && !error && records.length > 0 && <div className="ua-table-wrap" role="table" aria-label="User accounts">
         <div className="ua-table-row ua-table-head" role="row"><span role="columnheader">Account</span><span role="columnheader">Contact</span><span role="columnheader">Type</span><span role="columnheader">Financial accounts</span><span role="columnheader">Loans</span><span role="columnheader">Status</span><span role="columnheader" aria-label="Actions"/></div>
         {records.map(account => <div className="ua-table-row" role="row" key={account.id}>
-          <span className="ua-account-cell" role="cell"><AccountAvatar account={account}/><span><button type="button" onClick={() => onView(account.id)}>{account.name}</button><small>{account.code || 'NO CODE'}</small></span></span>
+          <span className="ua-account-cell" role="cell"><AccountAvatar account={account}/><span><AppLink href={pagePath('user-accounts', account.id)}>{account.name}</AppLink><small>{account.code || 'NO CODE'}</small></span></span>
           <span className="ua-contact-cell" role="cell"><strong>{account.email || 'No email'}</strong><small>{account.phone || 'No phone number'}</small></span>
           <span role="cell"><span className={`ua-type-badge ${account.type}`}>{account.type === 'company' ? <Building2 size={12}/> : <UserRound size={12}/>} {humanize(account.type)}</span></span>
           <span className="ua-link-count" role="cell"><strong>{account.financialAccountsCount}</strong><small>{account.financialAccountsCount === 1 ? 'account' : 'accounts'}</small></span>
           <span className="ua-link-count" role="cell"><strong>{account.loansCount}</strong><small>{account.loansCount === 1 ? 'loan' : 'loans'}</small></span>
           <span role="cell"><span className={`ua-status ${account.isActive ? 'active' : 'inactive'}`}><i/>{account.isActive ? 'Active' : 'Inactive'}</span></span>
-          <span className="ua-row-action" role="cell"><button type="button" onClick={() => onView(account.id)} aria-label={`View ${account.name}`}><ChevronRight size={17}/></button></span>
+          <span className="ua-row-action" role="cell"><AppLink href={pagePath('user-accounts', account.id)} aria-label={`View ${account.name}`}><ChevronRight size={17}/></AppLink></span>
         </div>)}
       </div>}
 
@@ -383,15 +384,15 @@ function UserAccountDetail({ accountId, onBack, onEdit, onDeleted }) {
     }
   };
 
-  if (loading) return <main className="content inner-page ua-page"><button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>User accounts</button><section className="panel ua-state ua-detail-state"><RefreshCw className="spin" size={23}/><strong>Loading account details…</strong><span>Fetching linked financial accounts and loans.</span></section></main>;
-  if (error || !account) return <main className="content inner-page ua-page"><button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>User accounts</button><section className="panel ua-state ua-detail-state error"><CircleHelp size={25}/><strong>Account details could not be loaded</strong><span>{error?.message || 'The requested account was not found.'}</span><button className="secondary-button" type="button" onClick={() => setReloadKey(value => value + 1)}><RotateCcw size={15}/>Try again</button></section></main>;
+  if (loading) return <main className="content inner-page ua-page"><AppLink href={pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>User accounts</AppLink><section className="panel ua-state ua-detail-state"><RefreshCw className="spin" size={23}/><strong>Loading account details…</strong><span>Fetching linked financial accounts and loans.</span></section></main>;
+  if (error || !account) return <main className="content inner-page ua-page"><AppLink href={pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>User accounts</AppLink><section className="panel ua-state ua-detail-state error"><CircleHelp size={25}/><strong>Account details could not be loaded</strong><span>{error?.message || 'The requested account was not found.'}</span><button className="secondary-button" type="button" onClick={() => setReloadKey(value => value + 1)}><RotateCcw size={15}/>Try again</button></section></main>;
 
   const deletionBlocked = linkedCount > 0 || deleteBlocked;
   return <main className="content inner-page ua-page ua-detail-page">
-    <button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>User accounts</button>
+    <AppLink href={pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>User accounts</AppLink>
     <div className="title-row ua-detail-title">
       <div className="ua-detail-identity"><AccountAvatar account={account} large/><div><p className="eyebrow">{account.code || 'USER ACCOUNT'}</p><h1>{account.name}</h1><p>{account.type === 'company' ? 'Company account' : 'Individual account'}</p></div></div>
-      <div className="ua-detail-actions"><span className={`ua-status ${account.isActive ? 'active' : 'inactive'}`}><i/>{account.isActive ? 'Active' : 'Inactive'}</span><button className="secondary-button" type="button" onClick={onEdit}><Edit3 size={15}/>Edit account</button></div>
+      <div className="ua-detail-actions"><span className={`ua-status ${account.isActive ? 'active' : 'inactive'}`}><i/>{account.isActive ? 'Active' : 'Inactive'}</span><AppLink href={pagePath('user-accounts', accountId, { view: 'edit' })} className="secondary-button"><Edit3 size={15}/>Edit account</AppLink></div>
     </div>
 
     {notice && <div className="ua-notice success"><Check size={17}/><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="Dismiss notice"><X size={14}/></button></div>}
@@ -543,12 +544,12 @@ function UserAccountForm({ accountId, onBack, onSaved }) {
     }
   };
 
-  if (loading) return <main className="content inner-page ua-page"><button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>User accounts</button><section className="panel ua-state ua-detail-state"><RefreshCw className="spin" size={23}/><strong>Loading account…</strong><span>Preparing the account details for editing.</span></section></main>;
-  if (loadError) return <main className="content inner-page ua-page"><button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>User accounts</button><section className="panel ua-state ua-detail-state error"><CircleHelp size={25}/><strong>Account could not be loaded</strong><span>{loadError.message || 'Please return to the directory and try again.'}</span></section></main>;
+  if (loading) return <main className="content inner-page ua-page"><AppLink href={pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>User accounts</AppLink><section className="panel ua-state ua-detail-state"><RefreshCw className="spin" size={23}/><strong>Loading account…</strong><span>Preparing the account details for editing.</span></section></main>;
+  if (loadError) return <main className="content inner-page ua-page"><AppLink href={pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>User accounts</AppLink><section className="panel ua-state ua-detail-state error"><CircleHelp size={25}/><strong>Account could not be loaded</strong><span>{loadError.message || 'Please return to the directory and try again.'}</span></section></main>;
 
   const previewAccount = normalizeUserAccount({ ...form, is_active: form.is_active });
   return <main className="content inner-page ua-page ua-form-page">
-    <button className="back-button" type="button" onClick={onBack}><ArrowLeft size={16}/>{editing ? 'Account details' : 'User accounts'}</button>
+    <AppLink href={editing ? pagePath('user-accounts', accountId) : pagePath('user-accounts')} className="back-button"><ArrowLeft size={16}/>{editing ? 'Account details' : 'User accounts'}</AppLink>
     <div className="title-row ua-title-row"><div><p className="eyebrow">{editing ? 'EDIT USER ACCOUNT' : 'NEW USER ACCOUNT'}</p><h1>{editing ? 'Update account details' : 'Create a user account'}</h1><p>{editing ? 'Keep identity and contact details current without changing linked history.' : 'Add an individual or company that can own financial accounts and loans.'}</p></div><span className={`ua-status ${form.is_active ? 'active' : 'inactive'}`}><i/>{form.is_active ? 'Active' : 'Inactive'}</span></div>
 
     {saveError && <div className="ua-notice error"><CircleHelp size={17}/><span><strong>Could not save the account.</strong>{saveError}</span><button type="button" onClick={() => setSaveError('')} aria-label="Dismiss error"><X size={14}/></button></div>}
@@ -585,7 +586,7 @@ function UserAccountForm({ accountId, onBack, onSaved }) {
         <label className="ua-active-toggle"><input name="is_active" type="checkbox" checked={form.is_active} onChange={updateField}/><span><strong>Active account</strong><small>Active accounts appear in financial-account and loan selectors.</small></span></label>
         {validationMessage(fieldErrors, 'is_active') && <small className="ua-field-error">{validationMessage(fieldErrors, 'is_active')}</small>}
         <button className="primary-button ua-save-button" type="submit" disabled={saving}>{saving ? <RefreshCw className="spin" size={16}/> : <Save size={16}/>} {saving ? 'Saving account…' : editing ? 'Save changes' : 'Create account'}</button>
-        <button className="text-button" type="button" onClick={onBack} disabled={saving}>Cancel</button>
+        <AppLink href={editing ? pagePath('user-accounts', accountId) : pagePath('user-accounts')} className="text-button" disabled={saving}>Cancel</AppLink>
         <p className="ua-form-note"><ShieldCheck size={14}/>Changes to identity details do not alter existing financial transactions or loan history.</p>
       </aside>
     </form>

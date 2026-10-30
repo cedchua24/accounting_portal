@@ -2615,30 +2615,9 @@ function loanInstallmentSummary(loan = {}) {
   if (['paid', 'settled', 'completed'].includes(String(loan.status || '').toLowerCase()) && total) number = total;
   if (total) number = Math.min(total, Math.max(1, number || 1));
 
-  const exactPrincipal = installment.principal_due
-    ?? installment.principal_amount
-    ?? installment.principal
-    ?? loan.next_principal_due
-    ?? loan.next_due_principal
-    ?? loan.installment_principal_amount;
-  const exactInterest = installment.interest_due
-    ?? installment.interest_amount
-    ?? installment.interest
-    ?? loan.next_interest_due
-    ?? loan.next_due_interest
-    ?? loan.installment_interest_amount;
-  const principal = exactPrincipal != null
-    ? Number(exactPrincipal)
-    : total ? Number(loan.principal_amount || 0) / total : 0;
-  const interest = exactInterest != null
-    ? Number(exactInterest)
-    : total ? Number(loan.total_interest_amount ?? loan.interest_amount ?? loan.total_interest ?? 0) / total : 0;
-
   return {
     number: number || null,
     total: total || null,
-    principal,
-    interest,
     complete: ['paid', 'settled', 'completed'].includes(String(loan.status || '').toLowerCase()),
   };
 }
@@ -3418,7 +3397,6 @@ function LoanListPage({ onSelectLoan, createInitially = false, onExitCreate }) {
 </span>
 <span className={`loan-installment-cell ${installment.complete ? 'complete' : ''}`}>
 <strong>{installment.number ? `#${installment.number}${installment.total ? ` of ${installment.total}` : ''}` : '—'}</strong>
-{installment.number ? <><small>{money(installment.principal, loan.currency)} principal</small><small>{money(installment.interest, loan.currency)} interest</small></> : <small>No schedule</small>}
 </span>
 <span className="loan-total-cell">
 <strong>{money(loan.principal_amount, loan.currency)}</strong>
@@ -3576,7 +3554,7 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
             <span className="loan-due-date"><strong>{new Date(`${item.due_date}T00:00:00`).toLocaleDateString('en-PH', { day: '2-digit' })}</strong><small>{new Date(`${item.due_date}T00:00:00`).toLocaleDateString('en-PH', { month: 'short' }).toUpperCase()}</small><em>{dueNotice.label}</em></span>
             <span className="loan-due-identity" title={item.loan_number}><strong><b>ID {item.loan_id}</b>{item.party}</strong><small>{funding}</small><small>{money(item.total_loan_amount, item.currency)} total · {money(item.loan_paid_amount, item.currency)} paid · {money(item.loan_balance_amount, item.currency)} balance</small></span>
             <span className="loan-due-user">{item.user_account_name ? <><strong><UserRound size={11}/>{item.user_account_name}</strong><small>Linked user account</small></> : <><strong>Not applicable</strong><small>No linked user</small></>}</span>
-            <span className="loan-due-installment"><strong>#{item.installment_number} of {item.term_months}</strong><small>{money(item.principal_due, item.currency)} principal</small><small>{money(item.interest_due, item.currency)} interest</small></span>
+            <span className="loan-due-installment"><strong>#{item.installment_number} of {item.term_months}</strong></span>
             <span className="loan-due-progress"><strong>{money(item.outstanding_amount, item.currency)} outstanding</strong><small>{money(item.paid_amount, item.currency)} paid</small>{methods.length > 0 && <small>{item.payment_entries.length} payment{item.payment_entries.length === 1 ? '' : 's'} · {methods.join(', ')}</small>}</span>
             <span className={Number(item.overdue_interest_due) > 0 ? 'loan-due-charges red' : 'loan-due-charges'}><strong>{money(item.overdue_interest_due, item.currency)}</strong><small>Overdue interest</small>{Number(item.overpayment_amount) > 0 && <small>{money(item.overpayment_amount, item.currency)} overpayment</small>}</span>
             <span className="loan-due-total"><strong>{money(item.amount_due, item.currency)}</strong><small><em className={`installment-status ${item.status}`}>{humanize(item.status)}</em></small></span>

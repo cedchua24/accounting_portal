@@ -1,6 +1,7 @@
 import { authSession } from './auth-session.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const BAKINGSTORE_API_BASE_URL = (import.meta.env.VITE_BAKINGSTORE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/+$/, '');
 
 async function request(path, options = {}) {
   const token = import.meta.env.VITE_API_TOKEN || authSession.token();
@@ -25,6 +26,22 @@ async function request(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+async function bakingStoreRequest(path, options = {}) {
+  const response = await fetch(`${BAKINGSTORE_API_BASE_URL}${path}`, {
+    ...options,
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const requestError = new Error(error.message || `Baking store request failed (${response.status})`);
+    requestError.status = response.status;
+    throw requestError;
+  }
+
+  return response.json();
+}
+
 export const authApi = {
   login: (login, password) => request('/login', {
     method: 'POST',
@@ -35,6 +52,10 @@ export const authApi = {
     body: JSON.stringify({ ...payload, device_name: 'ledgerly-web' }),
   }),
   logout: () => request('/logout', { method: 'POST' }),
+};
+
+export const bakingStoreApi = {
+  refundableCustomerOrders: () => bakingStoreRequest('/shopOrderTransaction/fetchOnlineShopOrderRefundTransactionListV2', { method: 'POST' }),
 };
 
 export const accountingApi = {
@@ -100,6 +121,10 @@ export const accountingApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  createCreditCardTransaction: (id, payload) => request(`/credit-cards/${id}/transactions`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   financialAccounts: (params = '') => request(`/financial-accounts${params}`),
   userAccounts: (params = '') => request(`/user-accounts${params}`),
   userAccountList: () => request('/user-accounts/list'),
@@ -138,7 +163,13 @@ export const accountingApi = {
     body: JSON.stringify({ reason }),
   }),
   paymentMethods: (params = '?active=1') => request(`/payment-methods${params}`),
+  transactionTypes: (params = '') => request(`/transaction-types${params}`),
   chartAccounts: (params = '') => request(`/chart-accounts${params}`),
+  createChartAccount: (payload) => request('/chart-accounts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  deleteChartAccount: (id) => request(`/chart-accounts/${id}`, { method: 'DELETE' }),
   chartAccountGroups: (params = '') => request(`/chart-account-groups/list${params}`),
   chartAccountList: (params = '') => request(`/chart-accounts/list${params}`),
   chartAccountTree: (params = '') => request(`/chart-accounts/tree${params}`),
@@ -214,6 +245,13 @@ export const accountingApi = {
     body: JSON.stringify(payload),
   }),
   deleteLoanPayment: (loanId, paymentId) => request(`/loans/${loanId}/payments/${paymentId}`, { method: 'DELETE' }),
+  cheques: (params = '') => request(`/cheques${params}`),
+  chequeSummary: (params = '') => request(`/cheques/summary${params}`),
+  chequeBanks: (params = '') => request(`/cheques/banks${params}`),
+  chequeBankDues: (accountId, params = '') => request(`/cheques/banks/${accountId}/dues${params}`),
+  createCheque: (payload) => request('/cheques', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteCheque: (id) => request(`/cheques/${id}`, { method: 'DELETE' }),
+  markChequePaid: (id, payload) => request(`/cheques/${id}/mark-paid`, { method: 'POST', body: JSON.stringify(payload) }),
   interbranchOrders: (params = '') => request(`/interbranch-orders${params}`),
   createPayment: (payload) => request('/payments', {
     method: 'POST',

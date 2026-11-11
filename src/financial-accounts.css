@@ -1,0 +1,54 @@
+.linked-ledger-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 15px;
+  border: 1px solid #d6e3da;
+  border-radius: 10px;
+  background: #f5f9f6;
+  color: #30463a;
+}
+
+.linked-ledger-card > span,
+.linked-ledger-card strong,
+.linked-ledger-card small {
+  display: block;
+}
+
+.linked-ledger-card strong {
+  font-size: 11px;
+}
+
+.linked-ledger-card small {
+  margin-top: 4px;
+  color: #78877f;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.linked-ledger-icon {
+  width: 36px;
+  height: 36px;
+  display: grid !important;
+  place-items: center;
+  border-radius: 9px;
+  background: #e3efe6;
+  color: #347155;
+}
+
+.linked-ledger-badge {
+  padding: 6px 9px;
+  border-radius: 20px;
+  background: #dcece1;
+  color: #2e6a4c;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .4px;
+}
+
+@media (max-width: 680px) {
+  .linked-ledger-card {
+    grid-column: auto;
+  }
+}

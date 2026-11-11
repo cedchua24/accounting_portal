@@ -15,6 +15,7 @@ export const pagePaths = {
   'transfer-history': '/transfers/history',
   'credit-cards': '/credit-cards',
   loans: '/loans',
+  cheques: '/cheques',
   expenses: '/expenses/ledger',
   ledger: '/general-ledger',
   reports: '/reports',
@@ -41,7 +42,11 @@ export function pagePath(page, resourceId = null, options = {}) {
     if (params.size) path += `?${params.toString()}`;
   }
 
-  if (page === 'credit-cards' && resourceId != null) {
+  if (page === 'credit-cards' && options.view === 'new') {
+    path = '/credit-cards/new';
+  } else if (page === 'credit-cards' && options.view === 'upcoming') {
+    path = '/credit-cards/upcoming';
+  } else if (page === 'credit-cards' && resourceId != null) {
     path = `/credit-cards/${encodeURIComponent(resourceId)}${options.view === 'adjustments' ? '/adjustments' : ''}`;
     if (options.asOf) path += `?as_of=${encodeURIComponent(options.asOf)}`;
   }
@@ -49,6 +54,10 @@ export function pagePath(page, resourceId = null, options = {}) {
   if (page === 'loans' && options.view === 'new') path = '/loans/new';
   else if (page === 'loans' && options.view === 'upcoming') path = '/loans/upcoming';
   else if (page === 'loans' && resourceId != null) path = `/loans/${encodeURIComponent(resourceId)}`;
+
+  if (page === 'cheques' && options.view === 'bank-dues' && resourceId != null) path = `/cheques/banks/${encodeURIComponent(resourceId)}/dues`;
+  else if (page === 'cheques' && options.view === 'new') path = '/cheques/new';
+  else if (page === 'cheques' && options.view === 'due') path = '/cheques/due';
 
   if (page === 'expenses') {
     const expenseView = ['chart-accounts', 'types', 'categories', 'items', 'ledger', 'approvals'].includes(options.view)

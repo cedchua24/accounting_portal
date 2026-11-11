@@ -10,12 +10,15 @@ import {
   BriefcaseBusiness, FolderTree, Tags, TableProperties
 } from 'lucide-react';
 import './styles.css';
+import './financial-accounts.css';
 import './credit-cards.css';
 import './loans.css';
 import './expenses.css';
-import { accountingApi, authApi } from './api.js';
+import './cheques.css';
+import { accountingApi, authApi, bakingStoreApi } from './api.js';
 import ExpensesWorkspace from './expenses.jsx';
 import UserAccountsWorkspace from './user-accounts.jsx';
+import ChequesWorkspace from './cheques.jsx';
 import { AppLink, pagePath, pagePaths, visitPath } from './navigation.jsx';
 import { authSession, createAuthTabBridge } from './auth-session.js';
 
@@ -67,6 +70,7 @@ function pageFromPath(pathname) {
   if (pathname === '/financial-accounts' || pathname.startsWith('/financial-accounts/')) return 'accounts';
   if (pathname === '/credit-cards' || pathname.startsWith('/credit-cards/')) return 'credit-cards';
   if (pathname === '/loans' || pathname.startsWith('/loans/')) return 'loans';
+  if (pathname === '/cheques' || pathname.startsWith('/cheques/')) return 'cheques';
   if (pathname === '/expenses' || pathname.startsWith('/expenses/')) return 'expenses';
   return Object.entries(pagePaths).find(([, path]) => path === pathname)?.[0] || 'dashboard';
 }
@@ -83,6 +87,7 @@ const navGroups = [
     { id: 'transfers', label: 'Transfer money', icon: ArrowLeftRight },
     { id: 'credit-cards', label: 'Credit cards', icon: CreditCard },
     { id: 'loans', label: 'Loans', icon: HandCoins },
+    { id: 'cheques', label: 'Cheques', icon: Banknote },
   ] },
   { label: 'Accounting', items: [
     { id: 'expenses', label: 'Expense', icon: BriefcaseBusiness },
@@ -108,12 +113,16 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
   const selectedItem = sidebarSelection(active);
   const [transferMenuOpen, setTransferMenuOpen] = useState(selectedItem === 'transfers');
   const [refundMenuOpen, setRefundMenuOpen] = useState(selectedItem === 'refunds');
+  const [creditCardMenuOpen, setCreditCardMenuOpen] = useState(selectedItem === 'credit-cards');
   const [loanMenuOpen, setLoanMenuOpen] = useState(selectedItem === 'loans');
+  const [chequeMenuOpen, setChequeMenuOpen] = useState(selectedItem === 'cheques');
   const [expenseMenuOpen, setExpenseMenuOpen] = useState(selectedItem === 'expenses');
   useEffect(() => {
     if (selectedItem === 'transfers') setTransferMenuOpen(true);
     if (selectedItem === 'refunds') setRefundMenuOpen(true);
+    if (selectedItem === 'credit-cards') setCreditCardMenuOpen(true);
     if (selectedItem === 'loans') setLoanMenuOpen(true);
+    if (selectedItem === 'cheques') setChequeMenuOpen(true);
     if (selectedItem === 'expenses') setExpenseMenuOpen(true);
   }, [selectedItem]);
   return <>
@@ -134,9 +143,15 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
           </div> : item.id === 'transfers' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'transfers' ? 'parent-active' : ''}`} aria-expanded={transferMenuOpen} onClick={() => setTransferMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={transferMenuOpen ? 'open' : ''} size={15}/></button>
             {transferMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('transfers')} className={active === 'transfers' ? 'active' : ''} aria-current={active === 'transfers' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add transfer</span></AppLink><AppLink href={pagePath('transfer-history')} className={active === 'transfer-history' ? 'active' : ''} aria-current={active === 'transfer-history' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>History</span></AppLink></div>}
+          </div> : item.id === 'credit-cards' ? <div className="nav-dropdown" key={item.id}>
+            <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'credit-cards' ? 'parent-active' : ''}`} aria-expanded={creditCardMenuOpen} onClick={() => setCreditCardMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={creditCardMenuOpen ? 'open' : ''} size={15}/></button>
+            {creditCardMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('credit-cards', null, { view: 'new' })} className={currentPath === '/credit-cards/new' ? 'active' : ''} aria-current={currentPath === '/credit-cards/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>New transaction</span></AppLink><AppLink href={pagePath('credit-cards')} className={currentPath === '/credit-cards' || /^\/credit-cards\/(?!new$|upcoming$)[^/]+(?:\/adjustments)?$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/credit-cards' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Card list</span></AppLink><AppLink href={pagePath('credit-cards', null, { view: 'upcoming' })} className={currentPath === '/credit-cards/upcoming' ? 'active' : ''} aria-current={currentPath === '/credit-cards/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink></div>}
           </div> : item.id === 'loans' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'loans' ? 'parent-active' : ''}`} aria-expanded={loanMenuOpen} onClick={() => setLoanMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={loanMenuOpen ? 'open' : ''} size={15}/></button>
             {loanMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('loans', null, { view: 'new' })} className={currentPath === '/loans/new' ? 'active' : ''} aria-current={currentPath === '/loans/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add loan</span></AppLink><AppLink href={pagePath('loans')} className={currentPath === '/loans' || /^\/loans\/[^/]+$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/loans' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Loan list</span></AppLink><AppLink href={pagePath('loans', null, { view: 'upcoming' })} className={currentPath === '/loans/upcoming' ? 'active' : ''} aria-current={currentPath === '/loans/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink></div>}
+          </div> : item.id === 'cheques' ? <div className="nav-dropdown" key={item.id}>
+            <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'cheques' ? 'parent-active' : ''}`} aria-expanded={chequeMenuOpen} onClick={() => setChequeMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={chequeMenuOpen ? 'open' : ''} size={15}/></button>
+            {chequeMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('cheques', null, { view: 'new' })} className={currentPath === '/cheques/new' ? 'active' : ''} onNavigate={close}><Plus size={14}/><span>Add cheque</span></AppLink><AppLink href={pagePath('cheques')} className={currentPath === '/cheques' ? 'active' : ''} onNavigate={close}><ReceiptText size={14}/><span>Cheque list</span></AppLink><AppLink href={pagePath('cheques', null, { view: 'due' })} className={currentPath === '/cheques/due' || /^\/cheques\/banks\/[^/]+\/dues$/.test(currentPath) ? 'active' : ''} onNavigate={close}><CalendarDays size={14}/><span>Cheque due</span></AppLink></div>}
           </div> : item.id === 'expenses' ? <div className="nav-dropdown expense-nav" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'expenses' ? 'parent-active' : ''}`} aria-expanded={expenseMenuOpen} onClick={() => setExpenseMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={expenseMenuOpen ? 'open' : ''} size={15}/></button>
             {expenseMenuOpen && <div className="nav-submenu expense-nav-submenu"><AppLink href={pagePath('expenses', null, { view: 'chart-accounts' })} className={currentPath === '/expenses/chart-accounts' ? 'active' : ''} aria-current={currentPath === '/expenses/chart-accounts' ? 'page' : undefined} onNavigate={close}><FolderTree size={14}/><span>Chart of Accounts</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'types' })} className={currentPath === '/expenses/types' ? 'active' : ''} aria-current={currentPath === '/expenses/types' ? 'page' : undefined} onNavigate={close}><Tags size={14}/><span>Expense Type</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'categories' })} className={currentPath === '/expenses/categories' ? 'active' : ''} aria-current={currentPath === '/expenses/categories' ? 'page' : undefined} onNavigate={close}><TableProperties size={14}/><span>Expense Category</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'items' })} className={currentPath === '/expenses/items' ? 'active' : ''} aria-current={currentPath === '/expenses/items' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Expense</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'ledger' })} className={currentPath === '/expenses' || currentPath === '/expenses/ledger' || currentPath === '/expenses/approvals' ? 'active' : ''} aria-current={currentPath === '/expenses' || currentPath === '/expenses/ledger' ? 'page' : undefined} onNavigate={close}><BadgeDollarSign size={14}/><span>Expense Transaction</span></AppLink></div>}
@@ -743,33 +758,14 @@ function TransfersPage({ onViewHistory }) {
   </main>;
 }
 
-const refundMethodOptions = [
-  { type: 'cash', label: 'Cash', description: 'Return money from a cash account', Icon: Banknote },
-  { type: 'bank_transfer', label: 'Bank transfer', description: 'Send from a bank or checking account', Icon: Landmark },
-  { type: 'e_wallet', label: 'E-wallet', description: 'Return funds from a digital wallet', Icon: WalletCards },
-];
-
-function refundPaymentType(method) {
-  const key = String(method?.type || method?.code || method?.slug || method?.name || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
-  if (key.includes('cash')) return 'cash';
-  if (key.includes('wallet')) return 'e_wallet';
-  if (key.includes('bank') || key.includes('online') || key.includes('transfer')) return 'bank_transfer';
-  return key;
-}
-
 function emptyRefundForm() {
-  return {
-    original_payment_id: '', financial_account_id: '', payment_method_id: '',
-    refund_mode: 'exchange', original_payment_amount: '', replacement_amount: '',
-    refund_date: localIsoDate(new Date()), currency: 'PHP', amount: '',
-    reference: '', reason: '', post: true,
-  };
+  return { branch_id: '', transaction_id: '' };
 }
 
 function CustomerRefundsPage({ onViewList }) {
   const [form, setForm] = useState(emptyRefundForm);
-  const [accounts, setAccounts] = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [refundableOrders, setRefundableOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -779,30 +775,24 @@ function CustomerRefundsPage({ onViewList }) {
   useEffect(() => {
     let current = true;
     Promise.all([
-      loadEveryPage(page => accountingApi.financialAccounts(`?active=1&page=${page}`)),
-      accountingApi.paymentMethods(),
-    ]).then(([accountRecords, methodResponse]) => {
-      if (!current) return;
-      setAccounts(accountRecords.map(normalizeAccount).filter(account => !account.isCredit));
-      const methods = Array.isArray(methodResponse) ? methodResponse : methodResponse?.data || [];
-      setPaymentMethods(methods.filter(method => method.is_active !== false && ['cash', 'bank_transfer', 'e_wallet'].includes(refundPaymentType(method))));
-    }).catch(loadError => current && setError(loadError.message || 'Refund workspace could not be loaded.'))
+      loadEveryPage(page => accountingApi.branches(`?active=1&page=${page}`)),
+      bakingStoreApi.refundableCustomerOrders(),
+    ])
+      .then(([branchRecords, orderResponse]) => {
+        if (!current) return;
+        setBranches(branchRecords);
+        setRefundableOrders(Array.isArray(orderResponse) ? orderResponse : orderResponse?.data || []);
+      })
+      .catch(loadError => current && setError(loadError.message || 'Refund workspace could not be loaded.'))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
   }, []);
 
-  const selectedMethod = paymentMethods.find(method => String(method.id) === String(form.payment_method_id));
-  const selectedMethodType = refundPaymentType(selectedMethod);
-  const compatibleKinds = matchPaymentMethodKinds(selectedMethodType);
-  const compatibleAccounts = accounts.filter(account => compatibleKinds.includes(account.kind) && account.usable_for_payments !== false);
-  const selectedAccount = accounts.find(account => String(account.id) === String(form.financial_account_id));
-  const originalPaymentAmount = Number(form.original_payment_amount || 0);
-  const replacementAmount = Number(form.replacement_amount || 0);
-  const exchangeAmountReady = form.original_payment_amount !== '' && form.replacement_amount !== '' && originalPaymentAmount > replacementAmount;
-  const numericAmount = form.refund_mode === 'exchange' ? Math.max(0, originalPaymentAmount - replacementAmount) : Number(form.amount || 0);
-  const originalPaymentId = Number(form.original_payment_id || 0);
-  const amountReady = form.refund_mode === 'exchange' ? exchangeAmountReady : form.amount !== '' && numericAmount > 0;
-  const canSubmit = Boolean(originalPaymentId > 0 && amountReady && selectedMethod && selectedAccount && form.refund_date && form.currency && numericAmount > 0 && form.reason.trim());
+  const selectedBranch = branches.find(branch => String(branch.id) === String(form.branch_id));
+  const transactionId = Number(form.transaction_id || 0);
+  const selectedOrder = refundableOrders.find(order => Number(order.transaction_id) === transactionId);
+  const validTransactionId = Number.isInteger(transactionId) && transactionId > 0;
+  const canSubmit = Boolean(Number(form.branch_id) > 0 && validTransactionId);
 
   const updateForm = (field, value) => {
     setForm(current => ({ ...current, [field]: value }));
@@ -813,17 +803,6 @@ function CustomerRefundsPage({ onViewList }) {
     const value = fieldErrors[field];
     return value ? <small className="account-field-error">{Array.isArray(value) ? value[0] : value}</small> : null;
   };
-  const chooseMethodType = type => {
-    const method = paymentMethods.find(item => refundPaymentType(item) === type);
-    setForm(current => ({ ...current, payment_method_id: method ? String(method.id) : '', financial_account_id: '' }));
-    setFieldErrors(current => ({ ...current, payment_method_id: undefined, financial_account_id: undefined }));
-    setError('');
-  };
-  const chooseAccount = value => {
-    const account = accounts.find(item => String(item.id) === String(value));
-    setForm(current => ({ ...current, financial_account_id: value, currency: account?.currency || current.currency }));
-    setFieldErrors(current => ({ ...current, financial_account_id: undefined, currency: undefined }));
-  };
   const submitRefund = async event => {
     event.preventDefault();
     if (!canSubmit) return;
@@ -832,20 +811,12 @@ function CustomerRefundsPage({ onViewList }) {
     setFieldErrors({});
     try {
       const result = await accountingApi.createCustomerRefund({
-        original_payment_id: originalPaymentId,
-        financial_account_id: Number(form.financial_account_id),
-        payment_method_id: Number(form.payment_method_id),
-        refund_date: form.refund_date,
-        currency: form.currency,
-        amount: numericAmount,
-        reference: form.reference.trim() || null,
-        reason: form.reason.trim(),
-        post: form.post,
+        branch_id: Number(form.branch_id),
+        transaction_id: transactionId,
       });
       setCreatedRefund(result);
+      setRefundableOrders(current => current.filter(order => Number(order.transaction_id) !== transactionId));
       setForm(emptyRefundForm());
-      const refreshedAccounts = await loadEveryPage(page => accountingApi.financialAccounts(`?active=1&page=${page}`));
-      setAccounts(refreshedAccounts.map(normalizeAccount).filter(account => !account.isCredit));
     } catch (requestError) {
       setError(requestError.message || 'Customer refund could not be created.');
       setFieldErrors(requestError.details || {});
@@ -857,48 +828,24 @@ function CustomerRefundsPage({ onViewList }) {
   if (loading) return <main className="content inner-page"><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading refund workspace…</strong></section></main>;
 
   return <main className="content inner-page transfer-page refund-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund</h1><p>Keep the original sale intact, record the replacement value, and return only the difference.</p></div><AppLink href={pagePath('refund-list')} className="secondary-button"><ReceiptText size={16}/>View refund list</AppLink></div>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Customer refund</h1><p>Select the branch and search for an eligible customer order transaction.</p></div><AppLink href={pagePath('refund-list')} className="secondary-button"><ReceiptText size={16}/>View refund list</AppLink></div>
     {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Refund needs attention</strong>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
     {createdRefund && <div className="account-save-message success"><Check size={18}/><span><strong>{createdRefund.status === 'posted' ? 'Refund posted' : 'Draft saved'}</strong>{createdRefund.number || createdRefund.reference || 'Customer refund'} · {money(createdRefund.amount, createdRefund.currency || 'PHP')}</span><button type="button" onClick={() => setCreatedRefund(null)}>Dismiss</button></div>}
 
     <section className="transfer-layout">
       <form className="panel transfer-form" onSubmit={submitRefund}>
-        <div className="transfer-section-head"><span><RotateCcw size={20}/></span><div><h2>Refund details</h2><p>Link the refund to its original customer payment, then choose how the money will be returned.</p></div></div>
-
-        <div className="refund-mode-tabs" aria-label="Refund scenario"><button type="button" className={form.refund_mode === 'exchange' ? 'selected' : ''} onClick={() => updateForm('refund_mode', 'exchange')}><ArrowLeftRight size={16}/><span><strong>Item exchange</strong><small>Customer chooses a lower-value replacement</small></span></button><button type="button" className={form.refund_mode === 'other' ? 'selected' : ''} onClick={() => updateForm('refund_mode', 'other')}><RotateCcw size={16}/><span><strong>Other refund</strong><small>Enter the refund amount manually</small></span></button></div>
-
-        <div className="transfer-step-heading"><span className="transfer-step-number">1</span><div><h3>Original posted payment</h3><p>The original order and payment stay unchanged for a complete audit trail.</p></div></div>
-        <div className="transfer-fields refund-original-payment"><label>Original payment ID<input type="number" min="1" step="1" value={form.original_payment_id} onChange={event => updateForm('original_payment_id', event.target.value)} placeholder="For example, 25" required/>{issue('original_payment_id')}</label>{form.refund_mode === 'exchange' && <label>Amount originally paid<input type="number" min="0.01" step="0.01" value={form.original_payment_amount} onChange={event => updateForm('original_payment_amount', event.target.value)} placeholder="1,000.00" required/></label>}</div>
-
-        <div className="transfer-step-heading"><span className="transfer-step-number">2</span><div><h3>{form.refund_mode === 'exchange' ? 'Replacement and difference' : 'Refund amount'}</h3><p>{form.refund_mode === 'exchange' ? 'Enter the lower replacement value. The amount returned to the customer is calculated automatically.' : 'Enter the amount being returned from the original posted payment.'}</p></div></div>
-        {form.refund_mode === 'exchange' ? <><div className="transfer-fields refund-exchange-fields"><label>Replacement item value<input type="number" min="0" step="0.01" value={form.replacement_amount} onChange={event => updateForm('replacement_amount', event.target.value)} placeholder="800.00" required/></label><label>Refund difference<input value={money(numericAmount, form.currency)} readOnly/>{issue('amount')}</label></div><div className={`refund-calculation ${form.replacement_amount !== '' && originalPaymentAmount <= replacementAmount ? 'invalid' : ''}`}><div><span>Original order and payment</span><strong>{money(originalPaymentAmount, form.currency)}</strong><small>Preserved unchanged</small></div><span className="refund-calculation-symbol">−</span><div><span>Replacement value</span><strong>{money(replacementAmount, form.currency)}</strong><small>New item selected</small></div><span className="refund-calculation-symbol">=</span><div className="refund-calculation-result"><span>Return to customer</span><strong>{money(numericAmount, form.currency)}</strong><small>{exchangeAmountReady ? `MDR retains ${money(replacementAmount, form.currency)}` : 'Replacement must be lower'}</small></div></div></> : <div className="transfer-fields refund-exchange-fields"><label className="span-2">Refund amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => updateForm('amount', event.target.value)} placeholder="0.00" required/>{issue('amount')}</label></div>}
-
-        <div className="transfer-step-heading"><span className="transfer-step-number">3</span><div><h3>Refund method</h3><p>The selected method controls which financial accounts can fund the refund.</p></div></div>
-        <div className="transfer-method-grid refund-method-grid">{refundMethodOptions.map(({ type, label, description, Icon }) => {
-          const method = paymentMethods.find(item => refundPaymentType(item) === type);
-          const selected = selectedMethodType === type;
-          return <button type="button" key={type} className={selected ? 'selected' : ''} disabled={!method} onClick={() => chooseMethodType(type)}><Icon size={19}/><span><strong>{label}</strong><small>{method ? description : 'No active method available'}</small></span><Check size={15}/></button>;
-        })}</div>
-
-        <div className="transfer-step-heading refund-final-heading"><span className="transfer-step-number">4</span><div><h3>Posting details</h3><p>Choose the funding account, date, and audit reference.</p></div></div>
-        <div className="transfer-fields refund-final-fields">
-          <label className="span-2">Refund from<select value={form.financial_account_id} onChange={event => chooseAccount(event.target.value)} disabled={!selectedMethod} required><option value="">{selectedMethod ? 'Select a compatible financial account' : 'Choose a refund method first'}</option>{compatibleAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {money(account.availableBalance, account.currency || 'PHP')} available</option>)}</select>{selectedMethod && compatibleAccounts.length === 0 && <small className="account-field-help">No active account is compatible with this refund method.</small>}{issue('financial_account_id')}</label>
-          <label>Currency<input value={form.currency} readOnly/>{issue('currency')}</label>
-          <label>Refund date<input type="date" value={form.refund_date} onChange={event => updateForm('refund_date', event.target.value)} required/>{issue('refund_date')}</label>
-          <label>Reference <small>Optional</small><input value={form.reference} onChange={event => updateForm('reference', event.target.value)} placeholder="RETURN-1001"/>{issue('reference')}</label>
-          <label className="span-2">Reason<textarea rows="3" value={form.reason} onChange={event => updateForm('reason', event.target.value)} placeholder="Describe why the customer payment is being refunded" required/>{issue('reason')}</label>
+        <div className="transfer-section-head"><span><RotateCcw size={20}/></span><div><h2>Refund details</h2><p>The refund amount and original payment details are resolved automatically from the customer order.</p></div></div>
+        <div className="transfer-fields refund-original-payment">
+          <label>Branch<select value={form.branch_id} onChange={event => updateForm('branch_id', event.target.value)} required><option value="">Select branch</option>{branches.map(branch => <option value={branch.id} key={branch.id}>{branch.name}</option>)}</select>{issue('branch_id')}</label>
+          <label>Customer order transaction<input type="search" inputMode="numeric" list="refundable-customer-orders" value={form.transaction_id} onChange={event => updateForm('transaction_id', event.target.value.replace(/\D/g, ''))} placeholder="Search by transaction ID" autoComplete="off" required/><datalist id="refundable-customer-orders">{refundableOrders.map(order => <option key={order.transaction_id} value={order.transaction_id}>{calendarDate(order.date)} · {money(order.refund_amount, 'PHP')} refundable</option>)}</datalist>{issue('transaction_id')}{!fieldErrors.transaction_id && <small className="account-field-help">{refundableOrders.length ? `${refundableOrders.length} known refundable transaction${refundableOrders.length === 1 ? '' : 's'} available. You can also enter a transaction ID directly.` : 'Enter the customer order transaction ID directly.'}</small>}</label>
         </div>
-
-        <label className="transfer-post-toggle"><input type="checkbox" checked={form.post} onChange={event => updateForm('post', event.target.checked)}/><span><strong>Post immediately</strong><small>Turn this off to save a draft for review. A posted refund creates journal entries and reduces the selected account balance.</small></span></label>
-        <button className="primary-button transfer-submit" disabled={!canSubmit || submitting}>{submitting ? <><RefreshCw className="spin" size={16}/>Saving refund…</> : <><RotateCcw size={16}/>{form.post ? 'Post customer refund' : 'Save refund draft'}</>}</button>
+        <button className="primary-button transfer-submit" disabled={!canSubmit || submitting}>{submitting ? <><RefreshCw className="spin" size={16}/>Posting refund…</> : <><RotateCcw size={16}/>Post customer refund</>}</button>
       </form>
 
       <aside className="panel transfer-preview refund-preview">
-        <p className="eyebrow">REFUND PREVIEW</p><h2>{numericAmount > 0 ? money(numericAmount, form.currency) : money(0, form.currency)}</h2>
-        {form.refund_mode === 'exchange' && <div className="refund-structure-preview"><span>Original transaction<strong>{money(originalPaymentAmount, form.currency)}</strong></span><span>Replacement value<strong>{money(replacementAmount, form.currency)}</strong></span><span>Customer refund<strong>{money(numericAmount, form.currency)}</strong></span><span>Net retained<strong>{money(replacementAmount, form.currency)}</strong></span></div>}
-        <div className="refund-preview-account"><span className="account-logo large" style={{background:selectedAccount?.color || '#789087'}}>{selectedAccount?.initials || '?'}</span><div><small>Refund from</small><strong>{selectedAccount?.name || 'Choose financial account'}</strong><span>{selectedMethod ? humanize(selectedMethodType) : 'Choose refund method'}</span></div></div>
-        <dl className="transfer-preview-list"><div><dt>Scenario</dt><dd>{form.refund_mode === 'exchange' ? 'Item exchange' : 'Other refund'}</dd></div><div><dt>Original payment</dt><dd>{originalPaymentId > 0 ? `#${originalPaymentId}` : 'Not selected'}</dd></div><div><dt>Refund date</dt><dd>{calendarDate(form.refund_date)}</dd></div><div><dt>Reference</dt><dd>{form.reference.trim() || 'Optional'}</dd></div><div><dt>Posting</dt><dd>{form.post ? 'Post now' : 'Save draft'}</dd></div></dl>
-        <p className="transfer-disbursement-note"><ShieldCheck size={15}/>{form.refund_mode === 'exchange' ? 'The original sale and payment remain unchanged; only the calculated difference is posted as a refund.' : 'The original sale and payment remain unchanged; only this refund is posted.'} The API verifies all refundable limits and account rules.</p>
+        <p className="eyebrow">REFUND PREVIEW</p><h2>{selectedOrder ? money(selectedOrder.refund_amount, 'PHP') : createdRefund ? money(createdRefund.amount, createdRefund.currency || 'PHP') : 'Pending lookup'}</h2>
+        <dl className="transfer-preview-list"><div><dt>Branch</dt><dd>{selectedBranch?.name || 'Not selected'}</dd></div><div><dt>Transaction ID</dt><dd>{validTransactionId ? `#${transactionId}` : 'Not entered'}</dd></div>{selectedOrder && <><div><dt>Order date</dt><dd>{calendarDate(selectedOrder.date)}</dd></div><div><dt>Total paid</dt><dd>{money(selectedOrder.total_account, 'PHP')}</dd></div><div><dt>Current order total</dt><dd>{money(selectedOrder.total_amount, 'PHP')}</dd></div></>}<div><dt>Eligibility</dt><dd>{selectedOrder ? 'Found in refund search' : validTransactionId ? 'Verified on submission' : 'Pending'}</dd></div><div><dt>Posting</dt><dd>Post now</dd></div></dl>
+        <p className="transfer-disbursement-note"><ShieldCheck size={15}/>Accounting verifies the customer order, calculates the remaining refundable difference, and returns it through the original payment account.</p>
       </aside>
     </section>
   </main>;
@@ -1300,7 +1247,7 @@ function paymentLineConfirmation(item) {
   return { state: 'confirmed', label: 'Confirmed', confirmedAt, confirmedBy, lineId: line.id, canUpdate, confirmed: true };
 }
 
-const emptyTransactionFilters = { branch_id: '', date_from: '', date_to: '', debit: '', credit: '', status: '', event: '', sort: 'latest' };
+const emptyTransactionFilters = { transaction_type_id: '', branch_id: '', date_from: '', date_to: '', direction: '', confirmed: '', debit: '', credit: '', status: '', event: '', sort: 'latest' };
 
 const financialAccountKinds = [
   ['cash', 'Cash'],
@@ -1393,20 +1340,18 @@ function matchPaymentMethodKinds(type) {
 
 function AccountsPage({ onSelectAccount, onAddAccount }) {
   const [accounts, setAccounts] = useState([]);
-  const [accountChoices, setAccountChoices] = useState([]);
   const [paymentMethods, setPaymentMethods] = useState([]);
+  const [userAccounts, setUserAccounts] = useState([]);
   const [accountFilter, setAccountFilter] = useState('');
+  const [userAccountFilter, setUserAccountFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [authVersion, setAuthVersion] = useState(0);
 
   useEffect(() => {
     let current = true;
-    Promise.all([
-      accountingApi.paymentMethods(),
-      loadEveryPage(page => accountingApi.financialAccounts(`?page=${page}`)),
-    ])
-      .then(([response, financialAccountRecords]) => {
+    accountingApi.paymentMethods()
+      .then(response => {
         if (!current) return;
         const records = Array.isArray(response) ? response : response?.data || [];
         const preferredOrder = ['cash', 'online_transfer', 'e_wallet', 'cheque', 'credit_card', 'interbranch_settlement'];
@@ -1419,12 +1364,19 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
             if (leftRank !== rightRank) return (leftRank < 0 ? preferredOrder.length : leftRank) - (rightRank < 0 ? preferredOrder.length : rightRank);
             return String(left.name || '').localeCompare(String(right.name || ''), 'en', { sensitivity: 'base' });
           }));
-        setAccountChoices(financialAccountRecords.map(normalizeAccount));
       })
       .catch(() => {
         if (!current) return;
         setPaymentMethods([]);
-        setAccountChoices([]);
+      });
+    loadEveryPage(page => accountingApi.userAccounts(`?active=1&per_page=100&page=${page}`))
+      .then(records => {
+        if (!current) return;
+        setUserAccounts(records.sort((left, right) => String(left.name || left.display_name || '').localeCompare(String(right.name || right.display_name || ''), 'en', { sensitivity: 'base' })));
+      })
+      .catch(() => {
+        if (!current) return;
+        setUserAccounts([]);
       });
     return () => { current = false; };
   }, [authVersion]);
@@ -1433,41 +1385,35 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
     let current = true;
     setLoading(true);
     setError(null);
-    const [filterType, filterId] = accountFilter.split(':');
-    const request = filterType === 'account' && filterId
-      ? accountingApi.financialAccount(filterId).then(response => [response?.data || response])
-      : loadEveryPage(page => {
-        const params = new URLSearchParams({ page: String(page) });
-        if (filterType === 'method' && filterId) params.set('payment_method_id', filterId);
-        return accountingApi.financialAccounts(`?${params.toString()}`);
-      });
+    const request = loadEveryPage(page => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (accountFilter) params.set('payment_method_id', accountFilter);
+      return accountingApi.financialAccounts(`?${params.toString()}`);
+    });
     request
       .then(records => {
         if (!current) return;
-        setAccounts(records.filter(Boolean).map(normalizeAccount));
+        const validRecords = records.filter(Boolean);
+        const filteredRecords = userAccountFilter
+          ? validRecords.filter(record => String(record.user_account?.id || record.userAccount?.id || record.account_holder || record.user_account_id || '') === userAccountFilter)
+          : validRecords;
+        setAccounts(filteredRecords.map(normalizeAccount));
       })
       .catch(requestError => current && setError(requestError))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
-  }, [authVersion, accountFilter]);
+  }, [authVersion, accountFilter, userAccountFilter]);
 
   const savingsTotal = accounts.filter(account => !account.isCredit).reduce((sum, account) => sum + account.balance, 0);
   const creditLimitTotal = accounts.filter(account => account.isCredit).reduce((sum, account) => sum + (account.creditLimit || 0), 0);
   const sortedAccounts = [...accounts].sort((left, right) => right.currentBalance - left.currentBalance
     || left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }));
-  const compatibleKinds = method => matchPaymentMethodKinds(method.type);
-  const accountGroups = paymentMethods.map(method => ({
-    method,
-    accounts: accountChoices.filter(account => compatibleKinds(method).includes(account.kind)),
-  }));
-  const groupedAccountIds = new Set(accountGroups.flatMap(group => group.accounts.map(account => String(account.id))));
-  const otherAccountChoices = accountChoices.filter(account => !groupedAccountIds.has(String(account.id)));
 
   return <main className="content inner-page">
     <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Financial accounts</h1><p>One source of truth for bank, cash, e-wallet, and credit accounts.</p></div><AppLink href={pagePath('accounts', null, { view: 'new' })} className="secondary-button"><Plus size={17}/>Add account</AppLink></div>
     <section className="account-filter" aria-label="Financial account filters">
-      <label htmlFor="payment-method-filter"><SlidersHorizontal size={16}/><span>Payment method</span></label>
-      <div className="filter-select-wrap"><select id="payment-method-filter" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}><option value="">All payment methods and accounts</option>{accountGroups.map(({ method, accounts: methodAccounts }) => <optgroup key={method.id} label={method.name}><option value={`method:${method.id}`}>All {method.name} accounts</option>{methodAccounts.map(account => <option key={`${method.id}-${account.id}`} value={`account:${account.id}`}>{account.name}</option>)}</optgroup>)}{otherAccountChoices.length > 0 && <optgroup label="Other accounts">{otherAccountChoices.map(account => <option key={account.id} value={`account:${account.id}`}>{account.name}</option>)}</optgroup>}</select><ChevronDown size={15}/></div>
+      <div className="account-filter-control"><label htmlFor="payment-method-filter"><SlidersHorizontal size={16}/><span>Payment method</span></label><div className="filter-select-wrap"><select id="payment-method-filter" value={accountFilter} onChange={event => setAccountFilter(event.target.value)}><option value="">All payment methods</option>{paymentMethods.map(method => <option key={method.id} value={method.id}>{method.name}</option>)}</select><ChevronDown size={15}/></div></div>
+      <div className="account-filter-control"><label htmlFor="user-account-filter"><UserRound size={16}/><span>User account</span></label><div className="filter-select-wrap"><select id="user-account-filter" value={userAccountFilter} onChange={event => setUserAccountFilter(event.target.value)}><option value="">All user accounts</option>{userAccounts.map(account => <option key={account.id} value={account.id}>{account.name || account.display_name || `User account ${account.id}`}</option>)}</select><ChevronDown size={15}/></div></div>
     </section>
     {!loading && !error && accounts.length > 0 && <section className="account-summary">
       <div><span>Current savings</span><strong>{peso.format(savingsTotal)}</strong><small>Across {accounts.filter(account => !account.isCredit).length} cash accounts</small></div>
@@ -1475,7 +1421,7 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
     </section>}
     {loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading financial accounts…</h2><p>Fetching your latest posted balances.</p></section>}
     {!loading && error && <section className="panel account-state error-state"><CircleHelp size={24}/><h2>Financial accounts could not be loaded</h2><p>{error.status === 401 ? 'Your accounting API session is not authorized. Please ask an administrator to check the shared authentication setup.' : error.message || 'Could not load financial accounts.'}</p><button className="secondary-button" onClick={() => setAuthVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section>}
-    {!loading && !error && accounts.length === 0 && <section className="panel account-state"><Landmark size={24}/><h2>No financial accounts yet</h2><p>Add an account to start tracking current balances and credit limits.</p></section>}
+    {!loading && !error && accounts.length === 0 && <section className="panel account-state"><Landmark size={24}/><h2>{accountFilter || userAccountFilter ? 'No matching financial accounts' : 'No financial accounts yet'}</h2><p>{accountFilter || userAccountFilter ? 'Try a different payment method or user account.' : 'Add an account to start tracking current balances and credit limits.'}</p></section>}
     {!loading && !error && accounts.length > 0 && <section className="account-cards account-list-page">{sortedAccounts.map(a => <AppLink href={pagePath('accounts', a.id)} key={a.id} className="big-account-card"><span className="account-logo large" style={{background:a.color}}>{a.initials}</span><span><small>{a.type}</small><strong>{a.name}</strong><em className="financial-account-holder">Account holder name: <b>{a.holderName}</b></em><em className="financial-account-number">Account number: <b>{a.accountNumber}</b></em></span><span className="card-balance"><small>{a.isCredit ? 'Outstanding balance' : 'Current balance'}</small><strong className={!a.isCredit && a.balance < 0 ? 'red' : ''}>{peso.format(a.currentBalance)}</strong>{a.isCredit && <em>Available {peso.format(a.availableBalance)}</em>}<em className="balance-updated">{balanceUpdatedLabel(a.balanceUpdatedAt)}</em></span><ChevronRight size={18}/></AppLink>)}</section>}
   </main>;
 }
@@ -1483,6 +1429,7 @@ function AccountsPage({ onSelectAccount, onAddAccount }) {
 function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
   const [account, setAccount] = useState(null);
   const [branches, setBranches] = useState([]);
+  const [transactionTypes, setTransactionTypes] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [transactionMeta, setTransactionMeta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1500,11 +1447,17 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
     let current = true;
     setLoading(true);
     setError(null);
-    Promise.all([accountingApi.financialAccount(accountId), accountingApi.branches('?active=1').catch(() => ({ data: [] }))])
-      .then(([accountResponse, branchResponse]) => {
+    Promise.all([
+      accountingApi.financialAccount(accountId),
+      accountingApi.branches('?active=1').catch(() => ({ data: [] })),
+      accountingApi.transactionTypes().catch(() => []),
+    ])
+      .then(([accountResponse, branchResponse, transactionTypeResponse]) => {
         if (!current) return;
         setAccount(normalizeAccount(accountResponse?.data || accountResponse));
         setBranches(Array.isArray(branchResponse) ? branchResponse : branchResponse?.data || []);
+        const typeRecords = Array.isArray(transactionTypeResponse) ? transactionTypeResponse : transactionTypeResponse?.data || [];
+        setTransactionTypes([...typeRecords].sort((left, right) => String(left.name || left.code || '').localeCompare(String(right.name || right.code || ''), 'en', { sensitivity: 'base' })));
       })
       .catch(requestError => current && setError(requestError))
       .finally(() => current && setLoading(false));
@@ -1555,6 +1508,10 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
   const activeFilterCount = Object.entries(appliedFilters).filter(([key, value]) => value !== '' && !(key === 'sort' && value === 'latest')).length;
   const totalDebit = Number(transactionMeta?.summary?.total_debit ?? transactions.reduce((sum, item) => sum + Number(item.debit || 0), 0));
   const totalCredit = Number(transactionMeta?.summary?.total_credit ?? transactions.reduce((sum, item) => sum + Number(item.credit || 0), 0));
+  const managingBranch = account?.branch || account?.owner_branch || account?.ownerBranch;
+  const managingBranchLabel = managingBranch
+    ? `${managingBranch.name || 'Unnamed branch'}${managingBranch.code ? ` (${managingBranch.code})` : ''}`
+    : 'Not assigned';
 
   const updateConfirmation = async event => {
     event.preventDefault();
@@ -1593,7 +1550,7 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
 
   return <main className="content inner-page account-transactions-page">
     <AppLink href={pagePath('accounts')} className="back-button"><ArrowLeft size={16}/>Financial accounts</AppLink>
-    <div className="title-row account-history-title"><div><p className="eyebrow">ACCOUNT PASSBOOK</p><h1>{account.name}</h1><p>{account.type}</p><p className="account-history-holder">Account holder name: <strong>{account.holderName}</strong></p><p className="account-history-number">Account number: <strong>{account.accountNumber}</strong></p></div><div className="account-history-actions"><AppLink href={pagePath('accounts', accountId, { view: 'edit' })} className="secondary-button"><Pencil size={15}/>Edit details</AppLink><AppLink href={pagePath('accounts', accountId, { view: 'adjustments' })} className="secondary-button"><SlidersHorizontal size={15}/>{account.isCredit ? 'Adjust amount due' : 'Adjust balance'}</AppLink><span className="account-logo history-logo" style={{background:account.color}}>{account.initials}</span></div></div>
+    <div className="title-row account-history-title"><div><p className="eyebrow">ACCOUNT PASSBOOK</p><h1>{account.name}</h1><p>{account.type}</p><p className="account-history-holder">Account holder name: <strong>{account.holderName}</strong></p><p className="account-history-number">Account number: <strong>{account.accountNumber}</strong></p><p className="account-history-branch">Managing branch: <strong>{managingBranchLabel}</strong></p></div><div className="account-history-actions"><AppLink href={pagePath('accounts', accountId, { view: 'edit' })} className="secondary-button"><Pencil size={15}/>Edit details</AppLink><AppLink href={pagePath('accounts', accountId, { view: 'adjustments' })} className="secondary-button"><SlidersHorizontal size={15}/>{account.isCredit ? 'Adjust amount due' : 'Adjust balance'}</AppLink><span className="account-logo history-logo" style={{background:account.color}}>{account.initials}</span></div></div>
     <section className="account-history-summary">
       <div><span>{account.isCredit ? 'Outstanding balance' : 'Current balance'}</span><strong className={!account.isCredit && account.currentBalance < 0 ? 'red' : ''}>{peso.format(account.currentBalance)}</strong></div>
       <div><span>{account.isCredit ? 'Available credit' : 'Available balance'}</span><strong>{peso.format(account.availableBalance)}</strong></div>
@@ -1607,9 +1564,12 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
     <section className="panel transaction-history">
       <div className="panel-head"><div><h2>All transactions</h2><p>Every debit and credit from payments, orders, expenses, transfers, refunds, settlements, and adjustments</p></div><div className="history-head-actions"><span className="transaction-count">{transactionMeta?.total ?? transactions.length} records</span><button className={`filter-toggle ${filtersOpen ? 'active' : ''}`} onClick={() => setFiltersOpen(open => !open)}><SlidersHorizontal size={15}/>Filters{activeFilterCount > 0 && <em>{activeFilterCount}</em>}<ChevronDown size={14}/></button></div></div>
       {filtersOpen && <form className="transaction-filters" onSubmit={applyFilters}>
+        <label>Transaction type<select name="transaction_type_id" value={draftFilters.transaction_type_id} onChange={updateFilter}><option value="">All transaction types</option>{transactionTypes.map(type => <option key={type.id} value={type.id}>{type.name || humanize(type.code)}</option>)}</select></label>
         <label>Branch<select name="branch_id" value={draftFilters.branch_id} onChange={updateFilter}><option value="">All branches</option>{branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
         <label>Date from<input name="date_from" type="date" value={draftFilters.date_from} max={draftFilters.date_to || undefined} onChange={updateFilter}/></label>
         <label>Date to<input name="date_to" type="date" value={draftFilters.date_to} min={draftFilters.date_from || undefined} onChange={updateFilter}/></label>
+        <label>Direction<select name="direction" value={draftFilters.direction} onChange={updateFilter}><option value="">Inbound & outbound</option><option value="IN_BOUND">Inbound</option><option value="OUT_BOUND">Outbound</option></select></label>
+        <label>Confirmation<select name="confirmed" value={draftFilters.confirmed} onChange={updateFilter}><option value="">All confirmation states</option><option value="1">Confirmed</option><option value="0">Unconfirmed</option></select></label>
         <label>Debit amount<input name="debit" type="number" min="0" step="0.0001" placeholder="Any amount" value={draftFilters.debit} onChange={updateFilter}/></label>
         <label>Credit amount<input name="credit" type="number" min="0" step="0.0001" placeholder="Any amount" value={draftFilters.credit} onChange={updateFilter}/></label>
         <label>Status<select name="status" value={draftFilters.status} onChange={updateFilter}><option value="">All statuses</option><option value="posted">Posted</option><option value="voided">Voided</option></select></label>
@@ -1619,16 +1579,19 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
       </form>}
       {confirmationError && <div className="confirmation-error"><CircleHelp size={15}/><span>{confirmationError}</span><button onClick={() => setConfirmationError('')} aria-label="Dismiss"><X size={14}/></button></div>}
       {transactionsLoading && <div className="transaction-state"><RefreshCw className="spin" size={20}/><span>Filtering transactions…</span></div>}
-      {!transactionsLoading && transactions.length === 0 && !error && <div className="transaction-state"><ReceiptText size={21}/><strong>No transactions found</strong><span>Try clearing the filters or choose a different date range.</span></div>}
-      {!transactionsLoading && transactions.length > 0 && <div className="transaction-table"><div className="transaction-row transaction-head"><span>Date</span><span>Transaction</span><span>Party / method</span><span>Status</span><span>Event</span><span>Confirmed</span><span>Debit</span><span>Credit</span><span>Balance effect</span></div>{transactions.map(item => {
+      {!transactionsLoading && transactions.length === 0 && !error && <div className="transaction-state"><ReceiptText size={21}/><strong>No transactions found</strong><span>Try clearing the filters or choosing different filter values.</span></div>}
+      {!transactionsLoading && transactions.length > 0 && <div className="transaction-table"><div className="transaction-row transaction-head"><span>Date</span><span>Branch</span><span>Transaction</span><span>Party / method</span><span>Status</span><span>Event</span><span>Confirmed</span><span>Debit</span><span>Credit</span><span>Balance effect</span></div>{transactions.map(item => {
         const details = item.transaction || {};
+        const transactionBranch = item.branch || details.branch;
         const sourceNumber = details.source_number || item.journal_number;
+        const shortSourceNumber = sourceNumber ? String(sourceNumber).slice(-5) : null;
         const paymentNumber = details.payment?.number;
         const effect = Number(item.balance_effect || 0);
         const event = item.event || (Number(item.debit || 0) > 0 ? 'DEBIT' : 'CREDIT');
+        const transactionType = item.transaction_type || details.transaction_type;
         const confirmation = paymentLineConfirmation(item);
         const isUpdating = String(updatingConfirmationId) === String(confirmation.lineId);
-        return <div className="transaction-row" key={item.id}><span className="transaction-date">{item.entry_date || '—'}<small>{item.branch?.name || ''}</small></span><span className="transaction-source"><strong>{humanize(details.source_type || item.movement_type)}</strong><small>{sourceNumber || '—'}{paymentNumber && paymentNumber !== sourceNumber ? ` · ${paymentNumber}` : ''}</small><em>{item.description || details.reference || ''}</em></span><span className="transaction-party"><strong>{transactionParty(item)}</strong><small>{transactionMethod(item)}</small></span><span><span className={`history-status ${(details.source_status || details.payment?.status || '').toLowerCase()}`}>{humanize(details.source_status || details.payment?.status || 'Recorded')}</span></span><span><span className={`event-badge ${event.toLowerCase()}`}>{event}</span></span><span className="confirmation-cell">{confirmation.canUpdate ? <button className={`confirmation-badge confirmation-action ${confirmation.state}`} disabled={isUpdating} aria-pressed={confirmation.confirmed} onClick={() => setConfirmationDialog({ ...confirmation, nextConfirmed: confirmation.confirmed, paymentNumber, sourceNumber })} title="Update payment confirmation">{isUpdating ? 'Updating…' : confirmation.label}</button> : <span className={`confirmation-badge ${confirmation.state}`}>{confirmation.label}</span>}{confirmation.confirmedAt && <small>{new Date(confirmation.confirmedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</small>}{confirmation.confirmedBy && <small>{confirmation.confirmedBy}</small>}</span><span>{Number(item.debit || 0) ? peso.format(Number(item.debit)) : '—'}</span><span>{Number(item.credit || 0) ? peso.format(Number(item.credit)) : '—'}</span><span className={effect >= 0 ? 'green' : 'red'}><strong>{effect >= 0 ? '+' : '−'}{peso.format(Math.abs(effect))}</strong><small>{humanize(item.direction)}</small></span></div>;
+        return <div className="transaction-row" key={item.id}><span className="transaction-date">{item.entry_date || '—'}</span><span className="transaction-branch"><strong>{transactionBranch?.name || '—'}</strong></span><span className="transaction-source" title={sourceNumber || undefined}><strong>{transactionType?.name || humanize(transactionType?.code || details.source_type || item.movement_type)}</strong>{shortSourceNumber && <small>{String(sourceNumber).length > 5 ? '…' : ''}{shortSourceNumber}</small>}</span><span className="transaction-party"><strong>{transactionParty(item)}</strong><small>{transactionMethod(item)}</small></span><span><span className={`history-status ${(details.source_status || details.payment?.status || '').toLowerCase()}`}>{humanize(details.source_status || details.payment?.status || 'Recorded')}</span></span><span><span className={`event-badge ${event.toLowerCase()}`}>{event}</span></span><span className="confirmation-cell">{confirmation.canUpdate ? <button className={`confirmation-badge confirmation-action ${confirmation.state}`} disabled={isUpdating} aria-pressed={confirmation.confirmed} onClick={() => setConfirmationDialog({ ...confirmation, nextConfirmed: confirmation.confirmed, paymentNumber, sourceNumber })} title="Update payment confirmation">{isUpdating ? 'Updating…' : confirmation.label}</button> : <span className={`confirmation-badge ${confirmation.state}`}>{confirmation.label}</span>}{confirmation.confirmedAt && <small>{new Date(confirmation.confirmedAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</small>}{confirmation.confirmedBy && <small>{confirmation.confirmedBy}</small>}</span><span>{Number(item.debit || 0) ? peso.format(Number(item.debit)) : '—'}</span><span>{Number(item.credit || 0) ? peso.format(Number(item.credit)) : '—'}</span><span className={effect >= 0 ? 'green' : 'red'}><strong>{effect >= 0 ? '+' : '−'}{peso.format(Math.abs(effect))}</strong><small>{humanize(item.direction)}</small></span></div>;
       })}</div>}
       {error && <p className="transaction-inline-error">{error.message}</p>}
       {transactionMeta?.next_page_url && <div className="transaction-more"><button className="secondary-button" onClick={loadMore} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more transactions'}</button></div>}
@@ -1637,12 +1600,11 @@ function AccountTransactionsPage({ accountId, onBack, onAdjust, onEdit }) {
   </main>;
 }
 
-function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
+function FinancialAccountEditPage({ accountId, onBack, onSaved, initialKind = '', backHref }) {
   const isCreate = accountId == null;
   const [account, setAccount] = useState(null);
   const [form, setForm] = useState(null);
   const [institutions, setInstitutions] = useState([]);
-  const [chartAccounts, setChartAccounts] = useState([]);
   const [branches, setBranches] = useState([]);
   const [userAccounts, setUserAccounts] = useState([]);
   const [applicationTypes, setApplicationTypes] = useState([]);
@@ -1657,25 +1619,24 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
     Promise.all([
       isCreate ? Promise.resolve(null) : accountingApi.financialAccount(accountId),
       loadFinancialInstitutions(),
-      loadActiveChartAccounts(),
       loadEveryPage(page => accountingApi.branches(`?active=1&page=${page}`)),
       loadEveryPage(page => accountingApi.userAccounts(`?active=1&per_page=100&page=${page}`)),
       accountingApi.financialAccountApplicationTypes(),
-    ]).then(([accountResponse, institutionResponse, ledgerResponse, branchResponse, userAccountResponse, applicationTypeResponse]) => {
+    ]).then(([accountResponse, institutionResponse, branchResponse, userAccountResponse, applicationTypeResponse]) => {
       if (!current) return;
       const record = accountResponse?.data || accountResponse || {};
+      const initializedRecord = isCreate && initialKind ? { ...record, kind: initialKind } : record;
       const typeRecords = Array.isArray(applicationTypeResponse) ? applicationTypeResponse : applicationTypeResponse?.data || [];
-      setAccount(record);
-      setForm(financialAccountForm(record, typeRecords));
+      setAccount(initializedRecord);
+      setForm(financialAccountForm(initializedRecord, typeRecords));
       setInstitutions(institutionResponse);
-      setChartAccounts(ledgerResponse);
       setBranches(branchResponse);
       setUserAccounts([...userAccountResponse].sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''), 'en', { sensitivity: 'base' })));
       setApplicationTypes(typeRecords);
     }).catch(requestError => current && setError(requestError.message || 'Account settings could not be loaded.'))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
-  }, [accountId, isCreate]);
+  }, [accountId, isCreate, initialKind]);
 
   const update = event => {
     const { name, value, type, checked } = event.target;
@@ -1721,7 +1682,6 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
       description: form.description.trim() || null,
       kind: form.kind,
       financial_institution_id: cash ? null : Number(form.financial_institution_id),
-      chart_account_id: Number(form.chart_account_id),
       currency: form.currency.trim().toUpperCase(),
       credit_limit: creditCard ? Number(form.credit_limit) : null,
       statement_day: creditCard ? Number(form.statement_day) : null,
@@ -1738,12 +1698,28 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
       branch_ids: form.branch_ids.map(Number),
     };
     if (form.account_number.trim()) payload.account_number = form.account_number.trim();
+    let createdLedger = null;
     try {
+      if (isCreate) {
+        const ledgerCode = `FA-${crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+        createdLedger = await accountingApi.createChartAccount({
+          code: ledgerCode,
+          name: form.name.trim(),
+          type: creditCard ? 'liability' : 'asset',
+          description: `Dedicated ledger for financial account: ${form.name.trim()}`,
+          is_postable: true,
+          is_active: true,
+        });
+        payload.chart_account_id = Number(createdLedger.id);
+      }
       const updated = isCreate
         ? await accountingApi.createFinancialAccount(payload)
         : await accountingApi.updateFinancialAccount(accountId, payload);
       onSaved(updated?.data?.id || updated?.id || accountId);
     } catch (requestError) {
+      if (isCreate && createdLedger?.id) {
+        await accountingApi.deleteChartAccount(createdLedger.id).catch(() => null);
+      }
       setFieldErrors(requestError.details || {});
       setError(requestError.message || 'The account could not be updated.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1754,20 +1730,20 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
 
   const issue = name => fieldErrors[name] && <small className="account-field-error">{[].concat(fieldErrors[name])[0]}</small>;
   if (loading) return <main className="content inner-page"><section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading account settings…</h2><p>Preparing financial account initialization details.</p></section></main>;
-  if (!form) return <main className="content inner-page"><AppLink href={accountId ? pagePath('accounts', accountId) : pagePath('accounts')} className="back-button"><ArrowLeft size={16}/>Account details</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account settings could not be loaded</h2><p>{error}</p></section></main>;
+  if (!form) return <main className="content inner-page"><AppLink href={backHref || (accountId ? pagePath('accounts', accountId) : pagePath('accounts'))} className="back-button"><ArrowLeft size={16}/>Account details</AppLink><section className="panel account-state error-state"><CircleHelp size={24}/><h2>Account settings could not be loaded</h2><p>{error}</p></section></main>;
 
   const maskedNumber = account.masked_account_number || account.account_number_masked || 'No number saved';
   const isCreditCard = form.kind === 'credit_card';
   const isCash = form.kind === 'cash';
-  const canSubmit = form.name.trim() && form.chart_account_id && form.currency.trim().length === 3
+  const canSubmit = form.name.trim() && form.currency.trim().length === 3
     && form.kind
     && (isCash || (form.financial_institution_id && (!isCreate || form.account_number.trim())))
     && (!isCreditCard || (form.credit_limit !== '' && form.statement_day && form.due_day))
     && form.branch_ids.length > 0;
 
   return <main className="content inner-page account-edit-page">
-    <AppLink href={isCreate ? pagePath('accounts') : pagePath('accounts', accountId)} className="back-button"><ArrowLeft size={16}/>{isCreate ? 'Financial accounts' : 'Account details'}</AppLink>
-    <div className="title-row"><div><p className="eyebrow">ACCOUNT SETUP</p><h1>{isCreate ? 'Create financial account' : 'Edit financial account'}</h1><p>{isCreate ? 'Initialize a financial account and choose which branches can use it.' : `Update identity, accounting, access, and transaction settings for ${account.name}.`}</p></div><span className={`edit-status-pill ${form.is_active ? 'active' : 'inactive'}`}>{form.is_active ? 'Active account' : 'Inactive account'}</span></div>
+    <AppLink href={backHref || (isCreate ? pagePath('accounts') : pagePath('accounts', accountId))} className="back-button"><ArrowLeft size={16}/>{isCreate && initialKind === 'credit_card' ? 'Credit cards' : isCreate ? 'Financial accounts' : 'Account details'}</AppLink>
+    <div className="title-row"><div><p className="eyebrow">ACCOUNT SETUP</p><h1>{isCreate && initialKind === 'credit_card' ? 'Add credit card' : isCreate ? 'Create financial account' : 'Edit financial account'}</h1><p>{isCreate && initialKind === 'credit_card' ? 'Add a card, assign its holder, and configure its statement cycle.' : isCreate ? 'Initialize a financial account and choose which branches can use it.' : `Update identity, accounting, access, and transaction settings for ${account.name}.`}</p></div><span className={`edit-status-pill ${form.is_active ? 'active' : 'inactive'}`}>{form.is_active ? 'Active account' : 'Inactive account'}</span></div>
     {error && <div className="account-save-message error" role="alert"><CircleHelp size={18}/><span><strong>We couldn’t save these changes</strong>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error"><X size={15}/></button></div>}
     <form className="account-edit-layout" onSubmit={submit}>
       <div className="account-edit-sections">
@@ -1775,7 +1751,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
           <div className="account-edit-heading"><span><Landmark size={19}/></span><div><h2>Account identity</h2><p>The name and banking details employees see when selecting this account.</p></div></div>
           <div className="account-form-grid">
             <label className="span-2">Account name<input name="name" value={form.name} onChange={update} maxLength="255" placeholder="e.g. BDO Payroll Account" required/>{issue('name')}</label>
-            <label>Account type<select name="kind" value={form.kind} onChange={update} required><option value="">Select account type</option>{financialAccountKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{issue('kind')}</label>
+            <label>Account type<select name="kind" value={form.kind} onChange={update} disabled={isCreate && Boolean(initialKind)} required><option value="">Select account type</option>{financialAccountKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{issue('kind')}</label>
             <label>Currency<input name="currency" value={form.currency} maxLength="3" placeholder="PHP" disabled required/>{issue('currency')}</label>
             <label>Financial institution<select name="financial_institution_id" value={form.financial_institution_id} onChange={update} disabled={isCash} required={!isCash}><option value="">{isCash ? 'Not required for cash' : 'Select institution'}</option>{institutions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{issue('financial_institution_id')}</label>
             <label>Account holder<select name="account_holder" value={form.account_holder} onChange={update}><option value="">No account holder</option>{userAccounts.map(item => <option key={item.id} value={item.id}>{item.name || item.display_name || `User account ${item.id}`}</option>)}</select><small className="account-field-help">Only active user accounts can be assigned.</small>{issue('account_holder')}</label>
@@ -1785,9 +1761,13 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
         </section>
 
         <section className="panel account-edit-section">
-          <div className="account-edit-heading"><span><BookOpen size={19}/></span><div><h2>Accounting configuration</h2><p>Connect the operational account to its unique general-ledger control account.</p></div></div>
+          <div className="account-edit-heading"><span><BookOpen size={19}/></span><div><h2>Accounting configuration</h2><p>Every financial account has one dedicated general-ledger control account.</p></div></div>
           <div className="account-form-grid">
-            <label className="span-2">Ledger account<select name="chart_account_id" value={form.chart_account_id} onChange={update} required><option value="">Select a leaf ledger account</option>{chartAccounts.map(item => <option key={item.id} value={item.id}>{item.code ? `${item.code} — ` : ''}{item.name} ({humanize(item.type)})</option>)}</select>{issue('chart_account_id')}</label>
+            <div className="span-2 linked-ledger-card">
+              <span className="linked-ledger-icon"><LockKeyhole size={18}/></span>
+              <span><strong>{isCreate ? 'Dedicated ledger account' : (account.chart_account?.name || account.chartAccount?.name || 'Dedicated ledger account')}</strong><small>{isCreate ? 'Created automatically when you save. It will not be shared with another financial account.' : `${account.chart_account?.code || account.chartAccount?.code || `Ledger #${form.chart_account_id}`} · Fixed one-to-one link`}</small>{issue('chart_account_id')}</span>
+              <span className="linked-ledger-badge">1 : 1</span>
+            </div>
             {isCreditCard && <>
               <label>Credit limit<input name="credit_limit" type="number" min="0" step="0.01" value={form.credit_limit} onChange={update} placeholder="0.00" required/>{issue('credit_limit')}</label>
               <label>Statement day<input name="statement_day" type="number" min="1" max="31" value={form.statement_day} onChange={update} required/>{issue('statement_day')}</label>
@@ -1815,8 +1795,8 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved }) {
         <div className="edit-review-list"><span>Account number<strong>{form.account_number ? (isCreate ? 'Ready to encrypt' : 'New number entered') : maskedNumber}</strong></span><span>Branch access<strong>{form.branch_ids.length} branch{form.branch_ids.length === 1 ? '' : 'es'}</strong></span><span>Applications<strong>{form.applications.length || 'Unrestricted'}</strong></span><span>Receipts / payments<strong>{form.usable_for_receipts ? 'Yes' : 'No'} / {form.usable_for_payments ? 'Yes' : 'No'}</strong></span></div>
         <label className="account-active-toggle"><input type="checkbox" name="is_active" checked={form.is_active} onChange={update}/><span><strong>Account is active</strong><small>Inactive accounts remain in history but cannot be used for new transactions.</small></span></label>
         {issue('is_active')}
-        <button type="submit" className="primary-button wide account-save-button" disabled={!canSubmit || saving}>{saving ? <><RefreshCw className="spin" size={16}/>{isCreate ? 'Creating account…' : 'Saving changes…'}</> : <><Save size={16}/>{isCreate ? 'Create financial account' : 'Save account details'}</>}</button>
-        <AppLink href={isCreate ? pagePath('accounts') : pagePath('accounts', accountId)} className="text-button wide" disabled={saving}>Cancel</AppLink>
+        <button type="submit" className="primary-button wide account-save-button" disabled={!canSubmit || saving}>{saving ? <><RefreshCw className="spin" size={16}/>{isCreate && initialKind === 'credit_card' ? 'Creating credit card…' : isCreate ? 'Creating account…' : 'Saving changes…'}</> : <><Save size={16}/>{isCreate && initialKind === 'credit_card' ? 'Create credit card' : isCreate ? 'Create financial account' : 'Save account details'}</>}</button>
+        <AppLink href={backHref || (isCreate ? pagePath('accounts') : pagePath('accounts', accountId))} className="text-button wide" disabled={saving}>Cancel</AppLink>
         <p className="account-security-note"><ShieldCheck size={14}/>Account numbers are encrypted and only the last four digits are returned by the API.</p>
       </aside>
     </form>
@@ -2061,13 +2041,155 @@ function creditCardIdentity(card = {}, institutions = []) {
   };
 }
 
-function CreditCardsPage({ onSelectCard }) {
+function creditCardHolderInitials(identity) {
+  const holderName = identity.accountHolderName;
+  if (!holderName || holderName === 'Account holder not provided') return '';
+  return holderName.trim().split(/\s+/).map(part => part[0]).join('').slice(0, 4).toUpperCase();
+}
+
+function emptyCreditCardTransactionForm() {
+  return {
+    credit_card_id: '', payment_date: localIsoDate(new Date()), due_date: '', amount: '', installment_count: '1',
+    reference: '', memo: '',
+  };
+}
+
+function CreditCardTransactionPage() {
+  const [form, setForm] = useState(emptyCreditCardTransactionForm);
+  const [cards, setCards] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [createdTransaction, setCreatedTransaction] = useState(null);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+
+  useEffect(() => {
+    let current = true;
+    const today = localIsoDate(new Date());
+    accountingApi.creditCards(`?as_of=${encodeURIComponent(today)}`).then(cardResponse => {
+      if (!current) return;
+      const cardRecords = apiRecords(cardResponse)
+        .filter(card => card.is_active !== false && card.usable_for_payments !== false)
+        .sort((left, right) => {
+          const leftIdentity = creditCardIdentity(left);
+          const rightIdentity = creditCardIdentity(right);
+          const leftHasInstitution = leftIdentity.institutionName !== 'Financial institution not provided';
+          const rightHasInstitution = rightIdentity.institutionName !== 'Financial institution not provided';
+          if (leftHasInstitution !== rightHasInstitution) return leftHasInstitution ? -1 : 1;
+          return leftIdentity.institutionName.localeCompare(rightIdentity.institutionName, 'en', { sensitivity: 'base', numeric: true })
+            || leftIdentity.accountName.localeCompare(rightIdentity.accountName, 'en', { sensitivity: 'base', numeric: true })
+            || leftIdentity.accountNumber.localeCompare(rightIdentity.accountNumber, 'en', { sensitivity: 'base', numeric: true });
+        });
+      setCards(cardRecords);
+      setForm(value => ({
+        ...value,
+        credit_card_id: value.credit_card_id || (cardRecords[0] ? String(cardRecords[0].id) : ''),
+      }));
+    }).catch(loadError => {
+      if (current) setError(loadError.message || 'Credit-card transaction options could not be loaded.');
+    }).finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, []);
+
+  const selectedCard = cards.find(card => String(card.id) === String(form.credit_card_id));
+  const cardGroups = cards.reduce((groups, card) => {
+    const identity = creditCardIdentity(card);
+    const groupName = identity.institutionName === 'Financial institution not provided' ? 'Other / Unassigned' : identity.institutionName;
+    const existingGroup = groups.find(group => group.name === groupName);
+    if (existingGroup) existingGroup.cards.push(card);
+    else groups.push({ name: groupName, cards: [card] });
+    return groups;
+  }, []);
+  const amount = Number(form.amount || 0);
+  const installments = Number(form.installment_count || 1);
+  const availableCredit = Number(selectedCard?.available_credit ?? selectedCard?.available_balance ?? 0);
+  const installmentAmount = installments > 0 ? amount / installments : 0;
+  const dueDateValid = !form.due_date || form.due_date >= form.payment_date;
+  const canSubmit = Boolean(form.credit_card_id && form.payment_date && dueDateValid && amount > 0
+    && installments >= 1 && installments <= 60 && amount <= availableCredit);
+
+  const updateForm = (field, value) => {
+    setForm(current => ({ ...current, [field]: value }));
+    setFieldErrors(current => ({ ...current, [field]: undefined, ...(field === 'credit_card_id' ? { credit_card: undefined } : {}) }));
+    setError('');
+  };
+  const issue = field => {
+    const value = fieldErrors[field];
+    if (!value) return null;
+    return <small className="account-field-error">{Array.isArray(value) ? value[0] : value}</small>;
+  };
+  const submitTransaction = async event => {
+    event.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError('');
+    setFieldErrors({});
+    try {
+      const payload = {
+        payment_date: form.payment_date, amount, installment_count: installments,
+        reference: form.reference.trim() || null, memo: form.memo.trim() || null,
+        idempotency_key: idempotencyKey,
+      };
+      if (form.due_date) payload.due_date = form.due_date;
+      const result = await accountingApi.createCreditCardTransaction(form.credit_card_id, payload);
+      setCreatedTransaction(result?.data || result);
+      setIdempotencyKey(crypto.randomUUID());
+      setForm(current => ({ ...current, due_date: '', amount: '', installment_count: '1', reference: '', memo: '' }));
+    } catch (requestError) {
+      const details = requestError.details || {};
+      const validationMessage = Object.values(details).flat()[0];
+      setError(validationMessage || requestError.message || 'The credit-card transaction could not be posted.');
+      setFieldErrors(details);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <main className="content inner-page"><AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink><section className="panel transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading transaction options…</strong><span>Fetching available credit cards.</span></section></main>;
+
+  return <main className="content inner-page credit-transaction-page">
+    <AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink>
+    <div className="title-row"><div><p className="eyebrow">CREDIT CARDS</p><h1>Add credit card transaction</h1><p>Record a card purchase, post its journal entry, and assign it to the correct statement cycle.</p></div><span className="edit-status-pill active">Posts immediately</span></div>
+    {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Transaction needs attention</strong>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
+    {createdTransaction && <div className="account-save-message success"><Check size={18}/><span><strong>Credit card transaction posted</strong>{createdTransaction.number || 'The transaction'} · {money(createdTransaction.amount, createdTransaction.currency || selectedCard?.currency || 'PHP')}</span><button type="button" onClick={() => setCreatedTransaction(null)}>Dismiss</button></div>}
+
+    <section className="credit-transaction-layout">
+      <form className="panel credit-transaction-form" onSubmit={submitTransaction}>
+        <div className="transfer-section-head"><span><CreditCard size={20}/></span><div><h2>Transaction details</h2><p>Choose the card and enter the purchase details. Its accounting defaults are applied automatically.</p></div></div>
+        {cards.length === 0 && <div className="credit-transaction-empty"><CircleHelp size={18}/><span><strong>No usable credit card is available.</strong>Add an active card that is enabled for payments before posting a transaction.</span></div>}
+        <div className="transfer-fields">
+          <label className="span-2">Credit card<select value={form.credit_card_id} onChange={event => updateForm('credit_card_id', event.target.value)} required><option value="">Select a credit card</option>{cardGroups.map(group => <optgroup key={group.name} label={group.name}>{group.cards.map(card => { const identity = creditCardIdentity(card); const holderInitials = creditCardHolderInitials(identity); return <option key={card.id} value={card.id}>{identity.accountName}{holderInitials ? ` · ${holderInitials}` : ''} · {identity.accountNumber} · {money(card.available_credit ?? card.available_balance, card.currency || 'PHP')} available</option>; })}</optgroup>)}</select>{issue('credit_card_id') || issue('credit_card')}</label>
+          <label>Transaction date<input type="date" value={form.payment_date} onChange={event => updateForm('payment_date', event.target.value)} required/>{issue('payment_date') || issue('transaction_date')}</label>
+          <label>First due date <small>Optional</small><input type="date" min={form.payment_date} value={form.due_date} onChange={event => updateForm('due_date', event.target.value)}/><small className="account-field-help">Leave blank to calculate it from the card's billing cycle.</small>{!dueDateValid && <small className="account-field-error">Due date cannot be before the transaction date.</small>}{issue('due_date')}</label>
+          <label>Amount<input type="number" min="0.01" max={availableCredit || undefined} step="0.01" value={form.amount} onChange={event => updateForm('amount', event.target.value)} placeholder="0.00" required/><small className="account-field-help">Available credit: {money(availableCredit, selectedCard?.currency || 'PHP')}</small>{issue('amount')}</label>
+          <label>Installments<input type="number" min="1" max="60" step="1" value={form.installment_count} onChange={event => updateForm('installment_count', event.target.value)} required/><small className="account-field-help">Use 1 for a regular transaction; up to 60 are supported.</small>{issue('installment_count')}</label>
+          <label>Reference <small>Optional</small><input value={form.reference} maxLength="100" onChange={event => updateForm('reference', event.target.value)} placeholder="e.g. MERCHANT-1001"/>{issue('reference')}</label>
+          <label className="span-2">Memo <small>Optional</small><textarea rows="3" value={form.memo} onChange={event => updateForm('memo', event.target.value)} placeholder="What was this card transaction for?"/>{issue('memo')}</label>
+        </div>
+        <button className="primary-button credit-transaction-submit" type="submit" disabled={!canSubmit || submitting}>{submitting ? <><RefreshCw className="spin" size={16}/>Posting transaction…</> : <><Check size={16}/>Post transaction</>}</button>
+      </form>
+
+      <aside className="panel credit-transaction-preview">
+        <p className="eyebrow">POSTING PREVIEW</p><h2>{money(amount, selectedCard?.currency || 'PHP')}</h2>
+        <div className="credit-transaction-card"><span><CreditCard size={18}/></span><div><small>CHARGE TO</small><strong>{selectedCard ? creditCardIdentity(selectedCard).accountName : 'Choose a credit card'}</strong><em>{money(availableCredit, selectedCard?.currency || 'PHP')} available</em></div></div>
+        <dl className="transfer-preview-list">
+          <div><dt>Installments</dt><dd>{installments || 1} × {money(installmentAmount, selectedCard?.currency || 'PHP')}</dd></div>
+          <div><dt>Date</dt><dd>{form.payment_date ? calendarDate(form.payment_date) : '—'}</dd></div>
+          <div><dt>First due date</dt><dd>{form.due_date ? calendarDate(form.due_date) : 'Calculated automatically'}</dd></div>
+        </dl>
+        {amount > availableCredit && <div className="credit-transaction-warning"><CircleHelp size={15}/><span>The amount exceeds this card's available credit.</span></div>}
+        <p className="transfer-disbursement-note"><ShieldCheck size={15}/><span>The API automatically uses this card's managing branch, credit-card payment method, and dedicated debit ledger.</span></p>
+      </aside>
+    </section>
+  </main>;
+}
+
+function CreditCardsPage({ view = 'list' }) {
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const [cards, setCards] = useState([]);
   const [institutions, setInstitutions] = useState([]);
   const [institutionId, setInstitutionId] = useState('');
-  const [institutionQuery, setInstitutionQuery] = useState('');
-  const [institutionOpen, setInstitutionOpen] = useState(false);
   const [asOf, setAsOf] = useState(today);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -2099,50 +2221,82 @@ function CreditCardsPage({ onSelectCard }) {
       .finally(() => current && setLoading(false));
     return () => { current = false; };
   }, [asOf, institutionId, refreshVersion]);
-  const matchingInstitutions = institutions.filter(institution => institution.displayName.toLowerCase().includes(institutionQuery.trim().toLowerCase()));
-  const currencies = [...new Set(cards.map(card => card.currency || 'PHP'))];
+  const upcomingOnly = view === 'upcoming';
+  const visibleCards = upcomingOnly
+    ? cards.filter(card => Number(card.amount_due || 0) > 0 || Number(card.nearest_payable_amount ?? card.next_due_amount ?? 0) > 0)
+    : cards;
+  const selectedInstitution = institutions.find(institution => String(institution.id) === String(institutionId));
+  const currencies = [...new Set(visibleCards.map(card => card.currency || 'PHP'))];
   const summaryCurrency = currencies.length === 1 ? currencies[0] : null;
-  const totalOutstanding = cards.reduce((sum, card) => sum + Number(card.outstanding_balance || 0), 0);
-  const totalDue = cards.reduce((sum, card) => sum + Number(card.amount_due || 0), 0);
-  const totalAvailable = cards.reduce((sum, card) => sum + Number(card.available_credit || 0), 0);
-  const urgentCount = cards.filter(card => ['OVERDUE', 'DUE_TODAY', 'DUE_URGENT', 'DUE_SOON'].includes(card.due_status)).length;
+  const totalOutstanding = visibleCards.reduce((sum, card) => sum + Number(card.outstanding_balance || 0), 0);
+  const totalDue = visibleCards.reduce((sum, card) => sum + Number(card.amount_due || 0), 0);
+  const totalAvailable = visibleCards.reduce((sum, card) => sum + Number(card.available_credit || 0), 0);
+  const urgentCount = visibleCards.filter(card => ['OVERDUE', 'DUE_TODAY', 'DUE_URGENT', 'DUE_SOON'].includes(card.due_status)).length;
   const summaryMoney = value => summaryCurrency ? money(value, summaryCurrency) : '—';
 
   return <main className="content inner-page credit-cards-page">
-    <div className="title-row credit-title-row"><div><p className="eyebrow">MONEY</p><h1>Credit card due monitor</h1><p>Stay ahead of statement balances and upcoming payment deadlines.</p></div><div className="monitor-actions"><div className="institution-combobox"><label htmlFor="institution-search">Financial institution <small>Optional</small></label><div className="institution-search-wrap"><Search size={15}/><input id="institution-search" role="combobox" aria-expanded={institutionOpen} aria-controls="institution-options" aria-autocomplete="list" placeholder="All institutions" value={institutionQuery} onFocus={() => setInstitutionOpen(true)} onBlur={() => window.setTimeout(() => setInstitutionOpen(false), 140)} onChange={event => { setInstitutionQuery(event.target.value); setInstitutionId(''); setInstitutionOpen(true); }}/>{institutionQuery && <button type="button" onMouseDown={event => event.preventDefault()} onClick={() => { setInstitutionQuery(''); setInstitutionId(''); }} aria-label="Clear institution"><X size={13}/></button>}</div>{institutionOpen && <div className="institution-options" id="institution-options" role="listbox"><button type="button" className={!institutionId ? 'selected' : ''} onMouseDown={event => event.preventDefault()} onClick={() => { setInstitutionId(''); setInstitutionQuery(''); setInstitutionOpen(false); }}>All institutions</button>{matchingInstitutions.map(institution => <button type="button" role="option" aria-selected={String(institution.id) === String(institutionId)} className={String(institution.id) === String(institutionId) ? 'selected' : ''} key={institution.id} onMouseDown={event => event.preventDefault()} onClick={() => { setInstitutionId(String(institution.id)); setInstitutionQuery(institution.displayName); setInstitutionOpen(false); }}><span>{institution.displayName}</span>{institution.code && <small>{institution.code}</small>}</button>)}{matchingInstitutions.length === 0 && <span className="institution-no-results">No institutions found</span>}</div>}</div><label>As of<input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}/></label><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div></div>
+    <div className="title-row credit-title-row"><div><p className="eyebrow">MONEY</p><h1>{upcomingOnly ? 'Credit card upcoming dues' : 'Credit card list'}</h1><p>{upcomingOnly ? 'Review cards with unpaid balances and upcoming payment deadlines.' : 'Track balances, available credit, and upcoming payment deadlines.'}</p></div>{upcomingOnly && <AppLink href={pagePath('credit-cards', null, { view: 'new' })} className="primary-button"><Plus size={17}/>New transaction</AppLink>}</div>
 
-    {!loading && !error && cards.length > 0 && <section className="credit-summary" aria-label="Credit card summary">
-      <div><span>Outstanding balance</span><strong>{summaryMoney(totalOutstanding)}</strong><small>{summaryCurrency ? `Across ${cards.length} card${cards.length === 1 ? '' : 's'}` : 'Multiple currencies'}</small></div>
+    {!loading && !error && visibleCards.length > 0 && <section className="credit-summary" aria-label="Credit card summary">
+      <div><span>Outstanding balance</span><strong>{summaryMoney(totalOutstanding)}</strong><small>{summaryCurrency ? `Across ${visibleCards.length} card${visibleCards.length === 1 ? '' : 's'}` : 'Multiple currencies'}</small></div>
       <div className={urgentCount ? 'summary-urgent' : ''}><span>Amount due</span><strong>{summaryMoney(totalDue)}</strong><small>{urgentCount ? `${urgentCount} card${urgentCount === 1 ? '' : 's'} need attention` : 'No urgent cards'}</small></div>
       <div><span>Available credit</span><strong>{summaryMoney(totalAvailable)}</strong><small>As of {calendarDate(asOf)}</small></div>
-      {(() => { const nearest = cards.find(card => Number(card.nearest_payable_amount ?? card.next_due_amount ?? 0) > 0); return <div><span>Nearest payable</span><strong>{nearest ? money(nearest.nearest_payable_amount ?? nearest.next_due_amount, nearest.currency) : summaryMoney(0)}</strong><small>{nearest ? `Due ${calendarDate(nearest.nearest_payable_due_date ?? nearest.nearest_due_date)}` : 'No unpaid statements'}</small></div>; })()}
+      {(() => { const nearest = visibleCards.find(card => Number(card.nearest_payable_amount ?? card.next_due_amount ?? 0) > 0); return <div><span>Nearest payable</span><strong>{nearest ? money(nearest.nearest_payable_amount ?? nearest.next_due_amount, nearest.currency) : summaryMoney(0)}</strong><small>{nearest ? `Due ${calendarDate(nearest.nearest_payable_due_date ?? nearest.nearest_due_date)}` : 'No unpaid statements'}</small></div>; })()}
     </section>}
 
-    {loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading credit cards…</h2><p>Checking balances, statements, and the nearest due dates.</p></section>}
-    {!loading && error && <section className="panel account-state error-state"><CircleHelp size={24}/><h2>Credit cards could not be loaded</h2><p>{error.status === 401 ? 'Your session is not authorized to view credit cards. Please sign in again or check the API token.' : error.message || 'The credit-card API did not respond.'}</p><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></section>}
-    {!loading && !error && cards.length === 0 && <section className="panel account-state"><CreditCard size={25}/><h2>No credit cards found</h2><p>{institutionId ? `No cards from ${institutionQuery} are available as of ${calendarDate(asOf)}.` : `No credit cards are available as of ${calendarDate(asOf)}.`}</p>{institutionId && <button className="secondary-button" onClick={() => { setInstitutionId(''); setInstitutionQuery(''); }}>Show all institutions</button>}</section>}
-
-    {!loading && !error && cards.length > 0 && <section className="credit-card-list">{cards.map(card => {
-      const status = card.due_status || 'NO_AMOUNT_DUE';
-      const identity = creditCardIdentity(card, institutions);
-      const utilization = Number(card.credit_limit) > 0 ? Math.min(100, Math.max(0, (Number(card.outstanding_balance || 0) / Number(card.credit_limit)) * 100)) : 0;
-      const statements = card.unpaid_statements || [];
-      const dayCount = Math.abs(Number(card.days_until_due || 0));
-      const dueCopy = status === 'OVERDUE'
-        ? `${dayCount} day${dayCount === 1 ? '' : 's'} overdue`
-        : status === 'DUE_TODAY' ? 'Payment is due today'
-        : status === 'NO_AMOUNT_DUE' ? 'Nothing currently due'
-        : `${Number(card.days_until_due || 0)} day${Number(card.days_until_due || 0) === 1 ? '' : 's'} remaining`;
-      return <AppLink href={pagePath('credit-cards', card.id, { asOf })} className={`credit-card-panel panel credit-card-clickable status-${status.toLowerCase()}`} key={card.id} aria-label={`View ${card.name} details`}>
-        <div className="credit-card-heading"><div className="credit-card-identity"><span className="credit-card-icon"><CreditCard size={20}/></span><div><span className="credit-card-kicker">{identity.institutionName}</span><h2>{identity.accountName}</h2><div className="credit-card-holder"><span>Account holder name</span><strong>{identity.accountHolderName}</strong></div><div className="credit-card-identifiers"><span>{identity.accountNumber}</span><span>{card.currency || 'PHP'}</span></div></div></div><span className={`due-status ${status.toLowerCase()}`}>{dueStatusLabels[status] || humanize(status)}</span></div>
-        <div className="credit-card-body">
-          <div className="credit-card-balance"><span>Outstanding balance</span><strong>{money(card.outstanding_balance, card.currency)}</strong><div className="utilization-track"><span style={{ width: `${utilization}%` }}/></div><small>{utilization.toFixed(0)}% of {money(card.credit_limit, card.currency)} limit used</small></div>
-          <div className="due-callout"><div><span>Nearest payable</span><strong>{money(card.nearest_payable_amount ?? card.next_due_amount ?? 0, card.currency)}</strong><small>{card.nearest_payable_due_date || card.nearest_due_date ? `Due ${calendarDate(card.nearest_payable_due_date ?? card.nearest_due_date)} · ${dueCopy}` : dueCopy}</small></div><CalendarDays size={22}/></div>
-          <dl className="credit-card-metrics"><div><dt>Amount due</dt><dd>{money(card.amount_due, card.currency)}</dd></div><div><dt>Next due amount</dt><dd>{money(card.next_due_amount, card.currency)}</dd></div><div><dt>Available credit</dt><dd>{money(card.available_credit, card.currency)}</dd></div><div><dt>Next closing date</dt><dd>{calendarDate(card.next_closing_date)}</dd></div><div><dt>Statement day</dt><dd>Day {card.statement_day ?? '—'}</dd></div><div><dt>Due day</dt><dd>Day {card.due_day ?? '—'}</dd></div></dl>
+    <section className="panel credit-list-panel">
+      <div className="credit-list-toolbar">
+        <div><strong>{upcomingOnly ? 'Cards with upcoming dues' : 'All credit cards'}</strong><small>{visibleCards.length} card{visibleCards.length === 1 ? '' : 's'} as of {calendarDate(asOf)}</small></div>
+        <div className="credit-list-filters">
+          <select value={institutionId} onChange={event => setInstitutionId(event.target.value)} aria-label="Financial institution">
+            <option value="">All institutions</option>
+            {institutions.map(institution => <option key={institution.id} value={institution.id}>{institution.displayName}</option>)}
+          </select>
+          <label className="credit-as-of"><span>As of</span><input type="date" value={asOf} onChange={event => setAsOf(event.target.value)}/></label>
+          <button className="icon-button" onClick={() => setRefreshVersion(version => version + 1)} disabled={loading} aria-label="Refresh credit cards"><RefreshCw className={loading ? 'spin' : ''} size={17}/></button>
         </div>
-        <div className="statement-section"><div className="statement-heading"><div><h3>Unpaid statements</h3><p>Open balances contributing to the amount due</p></div><span>{statements.length} open</span></div>{statements.length === 0 ? <div className="no-statements"><Check size={16}/>No unpaid statements</div> : <div className="statement-table"><div className="statement-row statement-head"><span>Statement</span><span>Statement date</span><span>Due date</span><span>Minimum due</span><span>Balance due</span><span>Status</span></div>{statements.map(statement => <div className="statement-row" key={statement.id}><span><strong>{statement.number}</strong><small>Total {money(statement.total_amount, card.currency)}</small></span><span>{calendarDate(statement.statement_date)}</span><span>{calendarDate(statement.due_date)}</span><span>{money(statement.minimum_due, card.currency)}</span><span><strong>{money(statement.balance_due, card.currency)}</strong><small>{money(statement.paid_amount, card.currency)} paid</small></span><span><span className={`history-status ${String(statement.status || '').toLowerCase()}`}>{humanize(statement.status || 'Open')}</span></span></div>)}</div>}<div className="card-detail-link">View full history and prepare a payment <ChevronRight size={15}/></div></div>
-      </AppLink>;
-    })}</section>}
+      </div>
+
+      {loading && <div className="credit-list-state"><RefreshCw className="spin" size={22}/><strong>Loading credit cards…</strong><span>Checking balances and upcoming due dates.</span></div>}
+      {!loading && error && <div className="credit-list-state error-state"><CircleHelp size={24}/><strong>Credit cards could not be loaded</strong><span>{error.status === 401 ? 'Your session is not authorized to view credit cards. Please sign in again or check the API token.' : error.message || 'The credit-card API did not respond.'}</span><button className="secondary-button" onClick={() => setRefreshVersion(version => version + 1)}><RefreshCw size={16}/>Try again</button></div>}
+      {!loading && !error && visibleCards.length === 0 && <div className="credit-list-state"><CreditCard size={25}/><strong>{upcomingOnly ? 'No upcoming credit card dues' : 'No credit cards found'}</strong><span>{upcomingOnly ? `No cards have a payable balance as of ${calendarDate(asOf)}.` : institutionId ? `No cards from ${selectedInstitution?.displayName || 'this institution'} are available as of ${calendarDate(asOf)}.` : `No credit cards are available as of ${calendarDate(asOf)}.`}</span>{institutionId && <button className="secondary-button" onClick={() => setInstitutionId('')}>Show all institutions</button>}</div>}
+
+      {!loading && !error && visibleCards.length > 0 && <div className="credit-list" role="table" aria-label="Credit cards">
+        <div className="credit-list-row credit-list-head" role="row">
+          <span role="columnheader">Card / Institution</span>
+          <span role="columnheader">Account holder</span>
+          <span role="columnheader">Outstanding balance</span>
+          <span role="columnheader">Amount due</span>
+          <span role="columnheader">Nearest payable</span>
+          <span role="columnheader">Available credit</span>
+          <span role="columnheader">Status</span>
+          <span aria-hidden="true"/>
+        </div>
+        {visibleCards.map(card => {
+          const status = card.due_status || 'NO_AMOUNT_DUE';
+          const identity = creditCardIdentity(card, institutions);
+          const utilization = Number(card.credit_limit) > 0 ? Math.min(100, Math.max(0, (Number(card.outstanding_balance || 0) / Number(card.credit_limit)) * 100)) : 0;
+          const dayCount = Math.abs(Number(card.days_until_due || 0));
+          const dueCopy = status === 'OVERDUE'
+            ? `${dayCount} day${dayCount === 1 ? '' : 's'} overdue`
+            : status === 'DUE_TODAY' ? 'Payment is due today'
+            : status === 'NO_AMOUNT_DUE' ? 'Nothing currently due'
+            : `${Number(card.days_until_due || 0)} day${Number(card.days_until_due || 0) === 1 ? '' : 's'} remaining`;
+          const nearestDueDate = card.nearest_payable_due_date ?? card.nearest_due_date;
+          const nearestPayable = card.nearest_payable_amount ?? card.next_due_amount ?? 0;
+          return <AppLink href={pagePath('credit-cards', card.id, { asOf })} className={`credit-list-row status-${status.toLowerCase()}`} key={card.id} role="row" aria-label={`View ${identity.accountName} details`}>
+            <span className="credit-list-identity" role="cell"><i><CreditCard size={17}/></i><span><strong>{identity.accountName}</strong><small>{identity.institutionName} · {identity.accountNumber} · {card.currency || 'PHP'}</small></span></span>
+            <span className="credit-list-holder" role="cell"><strong>{identity.accountHolderName}</strong><small>Linked account holder</small></span>
+            <span className="credit-list-money" role="cell"><strong>{money(card.outstanding_balance, card.currency)}</strong><small>{utilization.toFixed(0)}% of {money(card.credit_limit, card.currency)} limit</small></span>
+            <span className="credit-list-money due" role="cell"><strong>{money(card.amount_due, card.currency)}</strong><small>{(card.unpaid_statements || []).length} open statement{(card.unpaid_statements || []).length === 1 ? '' : 's'}</small></span>
+            <span className={`credit-list-payable ${status.toLowerCase()}`} role="cell"><strong>{nearestDueDate ? calendarDate(nearestDueDate) : '—'}</strong><small>{Number(nearestPayable) > 0 ? `${money(nearestPayable, card.currency)} · ${dueCopy}` : dueCopy}</small></span>
+            <span className="credit-list-money available" role="cell"><strong>{money(card.available_credit, card.currency)}</strong><small>{card.next_closing_date ? `Closes ${calendarDate(card.next_closing_date)}` : 'No closing date'}</small></span>
+            <span className="credit-list-status" role="cell"><em className={`due-status ${status.toLowerCase()}`}>{dueStatusLabels[status] || humanize(status)}</em></span>
+            <ChevronRight className="credit-list-chevron" size={17} aria-hidden="true"/>
+          </AppLink>;
+        })}
+      </div>}
+    </section>
   </main>;
 }
 
@@ -3775,8 +3929,13 @@ function App() {
     if (active === 'transfers') return <TransfersPage onViewHistory={() => navigate('transfer-history')}/>;
     if (active === 'transfer-history') return <TransferHistoryPage onNewTransfer={() => navigate('transfers')}/>;
     if (active === 'credit-cards') {
+      const creatingCard = currentPath === '/credit-cards/new';
+      const upcomingCards = currentPath === '/credit-cards/upcoming';
       const adjustmentCardId = currentPath.match(/^\/credit-cards\/([^/]+)\/adjustments$/)?.[1];
-      const cardId = currentPath.match(/^\/credit-cards\/([^/]+)$/)?.[1];
+      const cardId = !creatingCard && !upcomingCards ? currentPath.match(/^\/credit-cards\/([^/]+)$/)?.[1] : null;
+      if (creatingCard) {
+        return <CreditCardTransactionPage/>;
+      }
       if (adjustmentCardId) {
         const decodedId = decodeURIComponent(adjustmentCardId);
         const asOf = new URLSearchParams(window.location.search).get('as_of');
@@ -3784,12 +3943,17 @@ function App() {
       }
       return cardId
         ? <CreditCardDetailPage cardId={decodeURIComponent(cardId)} onBack={() => navigate('credit-cards')} onAdjust={asOf => navigate('accounts', decodeURIComponent(cardId), { view: 'adjustments', asOf, from: 'credit-card' })}/>
-        : <CreditCardsPage onSelectCard={(id, asOf) => navigate('credit-cards', id, { asOf })}/>;
+        : <CreditCardsPage view={upcomingCards ? 'upcoming' : 'list'}/>;
     }
     if (active === 'loans') {
       const loanView = currentPath === '/loans/new' ? 'new' : currentPath === '/loans/upcoming' ? 'upcoming' : 'list';
       const loanId = loanView === 'list' ? currentPath.match(/^\/loans\/([^/]+)$/)?.[1] : null;
       return <LoansPage view={loanView} selectedLoanId={loanId ? decodeURIComponent(loanId) : null} onSelectLoan={id => navigate('loans', id)} onBack={() => navigate('loans')} onAddLoan={() => navigate('loans', null, { view: 'new' })}/>;
+    }
+    if (active === 'cheques') {
+      const bankAccountId = currentPath.match(/^\/cheques\/banks\/([^/]+)\/dues$/)?.[1];
+      const chequeView = currentPath === '/cheques/new' ? 'new' : bankAccountId ? 'bank-dues' : currentPath === '/cheques/due' ? 'due' : 'list';
+      return <ChequesWorkspace view={chequeView} bankAccountId={bankAccountId ? decodeURIComponent(bankAccountId) : null} onNavigate={(view, id = null) => navigate('cheques', id, { view })}/>;
     }
     if (active === 'expenses') {
       const expenseView = currentPath.match(/^\/expenses\/([^/]+)$/)?.[1] || 'ledger';

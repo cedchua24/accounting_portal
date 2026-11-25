@@ -3,6 +3,7 @@ import React from 'react';
 export const pagePaths = {
   dashboard: '/',
   'cash-balance': '/cash-balance',
+  payables: '/payables',
   collections: '/collections',
   'user-accounts': '/user-accounts',
   accounts: '/financial-accounts',
@@ -46,6 +47,8 @@ export function pagePath(page, resourceId = null, options = {}) {
     path = '/credit-cards/new';
   } else if (page === 'credit-cards' && options.view === 'upcoming') {
     path = '/credit-cards/upcoming';
+  } else if (page === 'credit-cards' && options.view === 'paid') {
+    path = '/credit-cards/paid';
   } else if (page === 'credit-cards' && resourceId != null) {
     path = `/credit-cards/${encodeURIComponent(resourceId)}${options.view === 'adjustments' ? '/adjustments' : ''}`;
     if (options.asOf) path += `?as_of=${encodeURIComponent(options.asOf)}`;
@@ -53,11 +56,16 @@ export function pagePath(page, resourceId = null, options = {}) {
 
   if (page === 'loans' && options.view === 'new') path = '/loans/new';
   else if (page === 'loans' && options.view === 'upcoming') path = '/loans/upcoming';
+  else if (page === 'loans' && options.view === 'paid') path = '/loans/paid';
   else if (page === 'loans' && resourceId != null) path = `/loans/${encodeURIComponent(resourceId)}`;
 
   if (page === 'cheques' && options.view === 'bank-dues' && resourceId != null) path = `/cheques/banks/${encodeURIComponent(resourceId)}/dues`;
   else if (page === 'cheques' && options.view === 'new') path = '/cheques/new';
   else if (page === 'cheques' && options.view === 'due') path = '/cheques/due';
+  else if (page === 'cheques' && options.view === 'paid') path = '/cheques/paid';
+  else if (page === 'cheques' && options.view === 'paid-detail' && resourceId != null) path = `/cheques/paid/${encodeURIComponent(resourceId)}`;
+  else if (page === 'cheques' && options.view === 'checking-accounts') path = '/cheques/checking-accounts';
+  else if (page === 'cheques' && options.view === 'checking-account-detail' && resourceId != null) path = `/cheques/checking-accounts/${encodeURIComponent(resourceId)}`;
 
   if (page === 'expenses') {
     const expenseView = ['chart-accounts', 'types', 'categories', 'items', 'ledger', 'approvals'].includes(options.view)

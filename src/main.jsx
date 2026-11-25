@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity, ArrowDownLeft, ArrowLeft, ArrowLeftRight, ArrowUpRight, BadgeDollarSign,
-  Banknote, Bell, BookOpen, Building2, CalendarDays, Check, ChevronDown,
+  Banknote, Bell, BookOpen, Building2, CalendarDays, Check, CheckCircle2, ChevronDown,
   ChevronRight, CircleHelp, CreditCard, Download, Eye, EyeOff, FileBarChart, Landmark,
   LayoutDashboard, Menu, MoreHorizontal, Plus, ReceiptText, RefreshCw,
   LockKeyhole, LogOut, Mail, Search, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Store, Users,
@@ -15,12 +15,17 @@ import './credit-cards.css';
 import './loans.css';
 import './expenses.css';
 import './cheques.css';
+import './collections.css';
+import './balances.css';
+import './payables.css';
+import './dashboard-daily.css';
 import { accountingApi, authApi, bakingStoreApi } from './api.js';
 import ExpensesWorkspace from './expenses.jsx';
 import UserAccountsWorkspace from './user-accounts.jsx';
-import ChequesWorkspace from './cheques.jsx';
+import ChequesWorkspace, { ChequeDepositDialog } from './cheques.jsx';
 import { AppLink, pagePath, pagePaths, visitPath } from './navigation.jsx';
 import { authSession, createAuthTabBridge } from './auth-session.js';
+import { financialAccountInstitutionName, financialAccountOptionLabel } from './financial-account-labels.js';
 
 const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 2 });
 
@@ -48,7 +53,8 @@ function shortDate(dateString, includeYear = false) {
 }
 
 const standalonePageTitles = {
-  'cash-balance': 'Cash balance',
+  'cash-balance': 'Balances',
+  payables: 'Payables',
   collections: 'Collections',
   'upcoming-dues': 'Upcoming dues',
   'transfer-history': 'Transfer history',
@@ -58,7 +64,6 @@ const standalonePageTitles = {
 };
 
 function sidebarSelection(activePage) {
-  if (activePage === 'cash-balance') return 'accounts';
   if (activePage === 'upcoming-dues') return 'payments';
   if (activePage === 'transfer-history') return 'transfers';
   if (activePage === 'refund-list') return 'refunds';
@@ -79,6 +84,8 @@ const navGroups = [
   { label: 'Overview', items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   { label: 'Money', items: [
     { id: 'user-accounts', label: 'User accounts', icon: Users },
+    { id: 'cash-balance', label: 'Balances', icon: WalletCards },
+    { id: 'payables', label: 'Payables', icon: CalendarDays },
     { id: 'accounts', label: 'Financial accounts', icon: Landmark, count: 8 },
     { id: 'collections', label: 'Collections', icon: ArrowDownLeft },
     { id: 'payments', label: 'Payments', icon: BadgeDollarSign },
@@ -95,14 +102,6 @@ const navGroups = [
     { id: 'reports', label: 'Reports', icon: FileBarChart },
     { id: 'interbranch', label: 'Interbranch', icon: Building2 },
   ] },
-];
-
-const activity = [
-  { type: 'in', title: 'Customer payment', meta: 'Commonwealth · OR-28491', account: 'BDO Savings', amount: 24500, time: '10:42 AM', status: 'Posted' },
-  { type: 'out', title: 'Supplier payment', meta: 'Makati · PO-10882', account: 'BDO Savings', amount: -18650, time: '9:18 AM', status: 'Posted' },
-  { type: 'in', title: 'Customer payment', meta: 'Fairview · INV-8912', account: 'GCash — Ced', amount: 8450, time: 'Yesterday', status: 'Review' },
-  { type: 'transfer', title: 'Account transfer', meta: 'TRF-00481', account: 'GCash → BDO', amount: 35000, time: 'Yesterday', status: 'Posted' },
-  { type: 'out', title: 'Expense payment', meta: 'Main office · EXP-2451', account: 'BDO Savings', amount: -7280, time: 'Oct 9', status: 'Posted' },
 ];
 
 function Logo() {
@@ -145,13 +144,13 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
             {transferMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('transfers')} className={active === 'transfers' ? 'active' : ''} aria-current={active === 'transfers' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add transfer</span></AppLink><AppLink href={pagePath('transfer-history')} className={active === 'transfer-history' ? 'active' : ''} aria-current={active === 'transfer-history' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>History</span></AppLink></div>}
           </div> : item.id === 'credit-cards' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'credit-cards' ? 'parent-active' : ''}`} aria-expanded={creditCardMenuOpen} onClick={() => setCreditCardMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={creditCardMenuOpen ? 'open' : ''} size={15}/></button>
-            {creditCardMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('credit-cards', null, { view: 'new' })} className={currentPath === '/credit-cards/new' ? 'active' : ''} aria-current={currentPath === '/credit-cards/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>New transaction</span></AppLink><AppLink href={pagePath('credit-cards')} className={currentPath === '/credit-cards' || /^\/credit-cards\/(?!new$|upcoming$)[^/]+(?:\/adjustments)?$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/credit-cards' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Card list</span></AppLink><AppLink href={pagePath('credit-cards', null, { view: 'upcoming' })} className={currentPath === '/credit-cards/upcoming' ? 'active' : ''} aria-current={currentPath === '/credit-cards/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink></div>}
+            {creditCardMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('credit-cards', null, { view: 'new' })} className={currentPath === '/credit-cards/new' ? 'active' : ''} aria-current={currentPath === '/credit-cards/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>New transaction</span></AppLink><AppLink href={pagePath('credit-cards')} className={currentPath === '/credit-cards' || /^\/credit-cards\/(?!new$|upcoming$|paid$)[^/]+(?:\/adjustments)?$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/credit-cards' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Credit card accounts</span></AppLink><AppLink href={pagePath('credit-cards', null, { view: 'upcoming' })} className={currentPath === '/credit-cards/upcoming' ? 'active' : ''} aria-current={currentPath === '/credit-cards/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink><AppLink href={pagePath('credit-cards', null, { view: 'paid' })} className={currentPath === '/credit-cards/paid' ? 'active' : ''} aria-current={currentPath === '/credit-cards/paid' ? 'page' : undefined} onNavigate={close}><CheckCircle2 size={14}/><span>Paid transactions</span></AppLink></div>}
           </div> : item.id === 'loans' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'loans' ? 'parent-active' : ''}`} aria-expanded={loanMenuOpen} onClick={() => setLoanMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={loanMenuOpen ? 'open' : ''} size={15}/></button>
-            {loanMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('loans', null, { view: 'new' })} className={currentPath === '/loans/new' ? 'active' : ''} aria-current={currentPath === '/loans/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add loan</span></AppLink><AppLink href={pagePath('loans')} className={currentPath === '/loans' || /^\/loans\/[^/]+$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/loans' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Loan list</span></AppLink><AppLink href={pagePath('loans', null, { view: 'upcoming' })} className={currentPath === '/loans/upcoming' ? 'active' : ''} aria-current={currentPath === '/loans/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink></div>}
+            {loanMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('loans', null, { view: 'new' })} className={currentPath === '/loans/new' ? 'active' : ''} aria-current={currentPath === '/loans/new' ? 'page' : undefined} onNavigate={close}><Plus size={14}/><span>Add loan</span></AppLink><AppLink href={pagePath('loans')} className={currentPath === '/loans' || /^\/loans\/(?!new$|upcoming$|paid$)[^/]+$/.test(currentPath) ? 'active' : ''} aria-current={currentPath === '/loans' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Loan list</span></AppLink><AppLink href={pagePath('loans', null, { view: 'upcoming' })} className={currentPath === '/loans/upcoming' ? 'active' : ''} aria-current={currentPath === '/loans/upcoming' ? 'page' : undefined} onNavigate={close}><CalendarDays size={14}/><span>Upcoming dues</span></AppLink><AppLink href={pagePath('loans', null, { view: 'paid' })} className={currentPath === '/loans/paid' ? 'active' : ''} aria-current={currentPath === '/loans/paid' ? 'page' : undefined} onNavigate={close}><CheckCircle2 size={14}/><span>Paid loans</span></AppLink></div>}
           </div> : item.id === 'cheques' ? <div className="nav-dropdown" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'cheques' ? 'parent-active' : ''}`} aria-expanded={chequeMenuOpen} onClick={() => setChequeMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={chequeMenuOpen ? 'open' : ''} size={15}/></button>
-            {chequeMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('cheques', null, { view: 'new' })} className={currentPath === '/cheques/new' ? 'active' : ''} onNavigate={close}><Plus size={14}/><span>Add cheque</span></AppLink><AppLink href={pagePath('cheques')} className={currentPath === '/cheques' ? 'active' : ''} onNavigate={close}><ReceiptText size={14}/><span>Cheque list</span></AppLink><AppLink href={pagePath('cheques', null, { view: 'due' })} className={currentPath === '/cheques/due' || /^\/cheques\/banks\/[^/]+\/dues$/.test(currentPath) ? 'active' : ''} onNavigate={close}><CalendarDays size={14}/><span>Cheque due</span></AppLink></div>}
+            {chequeMenuOpen && <div className="nav-submenu"><AppLink href={pagePath('cheques', null, { view: 'new' })} className={currentPath === '/cheques/new' ? 'active' : ''} onNavigate={close}><Plus size={14}/><span>Add cheque</span></AppLink><AppLink href={pagePath('cheques', null, { view: 'checking-accounts' })} className={currentPath === '/cheques/checking-accounts' || /^\/cheques\/checking-accounts\/[^/]+$/.test(currentPath) ? 'active' : ''} onNavigate={close}><Landmark size={14}/><span>Checking accounts</span></AppLink><AppLink href={pagePath('cheques')} className={currentPath === '/cheques' ? 'active' : ''} onNavigate={close}><ReceiptText size={14}/><span>Cheque list</span></AppLink><AppLink href={pagePath('cheques', null, { view: 'due' })} className={currentPath === '/cheques/due' || /^\/cheques\/banks\/[^/]+\/dues$/.test(currentPath) ? 'active' : ''} onNavigate={close}><CalendarDays size={14}/><span>Cheque due</span></AppLink><AppLink href={pagePath('cheques', null, { view: 'paid' })} className={currentPath === '/cheques/paid' || /^\/cheques\/paid\/[^/]+$/.test(currentPath) ? 'active' : ''} onNavigate={close}><CheckCircle2 size={14}/><span>Cheque paid</span></AppLink></div>}
           </div> : item.id === 'expenses' ? <div className="nav-dropdown expense-nav" key={item.id}>
             <button type="button" className={`nav-dropdown-toggle ${selectedItem === 'expenses' ? 'parent-active' : ''}`} aria-expanded={expenseMenuOpen} onClick={() => setExpenseMenuOpen(value => !value)}><item.icon size={18}/><span>{item.label}</span><ChevronDown className={expenseMenuOpen ? 'open' : ''} size={15}/></button>
             {expenseMenuOpen && <div className="nav-submenu expense-nav-submenu"><AppLink href={pagePath('expenses', null, { view: 'chart-accounts' })} className={currentPath === '/expenses/chart-accounts' ? 'active' : ''} aria-current={currentPath === '/expenses/chart-accounts' ? 'page' : undefined} onNavigate={close}><FolderTree size={14}/><span>Chart of Accounts</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'types' })} className={currentPath === '/expenses/types' ? 'active' : ''} aria-current={currentPath === '/expenses/types' ? 'page' : undefined} onNavigate={close}><Tags size={14}/><span>Expense Type</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'categories' })} className={currentPath === '/expenses/categories' ? 'active' : ''} aria-current={currentPath === '/expenses/categories' ? 'page' : undefined} onNavigate={close}><TableProperties size={14}/><span>Expense Category</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'items' })} className={currentPath === '/expenses/items' ? 'active' : ''} aria-current={currentPath === '/expenses/items' ? 'page' : undefined} onNavigate={close}><ReceiptText size={14}/><span>Expense</span></AppLink><AppLink href={pagePath('expenses', null, { view: 'ledger' })} className={currentPath === '/expenses' || currentPath === '/expenses/ledger' || currentPath === '/expenses/approvals' ? 'active' : ''} aria-current={currentPath === '/expenses' || currentPath === '/expenses/ledger' ? 'page' : undefined} onNavigate={close}><BadgeDollarSign size={14}/><span>Expense Transaction</span></AppLink></div>}
@@ -170,7 +169,7 @@ function Sidebar({ active, currentPath, setActive, open, close, user, onLogout }
   </>;
 }
 
-function Header({ active, onMenu, onNew }) {
+function Header({ active, onMenu, onNew, onChequeDeposit, isCheckingAccounts = false }) {
   const title = navGroups.flatMap(g => g.items).find(i => i.id === active)?.label || standalonePageTitles[active] || 'Dashboard';
   return <header>
     <button className="menu-button" onClick={onMenu}><Menu size={21}/></button>
@@ -178,7 +177,9 @@ function Header({ active, onMenu, onNew }) {
     <div className="header-actions">
       <label className="search-box"><Search size={17}/><input placeholder="Search anything…"/><kbd>⌘ K</kbd></label>
       <button className="icon-button" aria-label="Notifications"><Bell size={19}/><span className="notification-dot"/></button>
-      <button className="primary-button" onClick={onNew}><Plus size={18}/>New transaction</button>
+      {isCheckingAccounts
+        ? <button className="primary-button" onClick={onChequeDeposit}><Banknote size={18}/>Deposit balance</button>
+        : <button className="primary-button" onClick={onNew}><Plus size={18}/>New transaction</button>}
     </div>
   </header>;
 }
@@ -213,10 +214,9 @@ function MiniChart({ dataPoints }) {
 }
 
 function Dashboard({ onNavigate }) {
-  const [{ dayFrom, dayTo }, setPeriod] = useState(dashboardPeriod);
-  const [dateFilterOpen, setDateFilterOpen] = useState(false);
-  const [draftDayFrom, setDraftDayFrom] = useState(dayFrom);
-  const [draftDayTo, setDraftDayTo] = useState(dayTo);
+  const [selectedDay, setSelectedDay] = useState(() => localIsoDate(new Date()));
+  const dayFrom = selectedDay;
+  const dayTo = selectedDay;
   const [cashBalance, setCashBalance] = useState(null);
   const [cashBalanceError, setCashBalanceError] = useState('');
   const [collections, setCollections] = useState(null);
@@ -225,15 +225,14 @@ function Dashboard({ onNavigate }) {
   const [paymentsError, setPaymentsError] = useState('');
   const [upcomingDues, setUpcomingDues] = useState(null);
   const [upcomingDuesError, setUpcomingDuesError] = useState('');
-  const [cashFlowDays, setCashFlowDays] = useState(30);
   const [cashFlow, setCashFlow] = useState(null);
   const [cashFlowError, setCashFlowError] = useState('');
   const [upcomingDuesList, setUpcomingDuesList] = useState(null);
   const [upcomingDuesListError, setUpcomingDuesListError] = useState('');
+  const [overdueDuesList, setOverdueDuesList] = useState(null);
+  const [overdueDuesListError, setOverdueDuesListError] = useState('');
   const [recentActivity, setRecentActivity] = useState(null);
   const [recentActivityError, setRecentActivityError] = useState('');
-  const [dashboardAccounts, setDashboardAccounts] = useState(null);
-  const [dashboardAccountsError, setDashboardAccountsError] = useState('');
 
   useEffect(() => {
     let current = true;
@@ -293,12 +292,9 @@ function Dashboard({ onNavigate }) {
 
   useEffect(() => {
     let current = true;
-    const cashFlowDayTo = new Date();
-    const cashFlowDayFrom = new Date(cashFlowDayTo);
-    cashFlowDayFrom.setDate(cashFlowDayFrom.getDate() - (cashFlowDays - 1));
     setCashFlow(null);
     setCashFlowError('');
-    accountingApi.dashboardCashFlow(localIsoDate(cashFlowDayFrom), localIsoDate(cashFlowDayTo))
+    accountingApi.dashboardCashFlow(dayFrom, dayTo)
       .then(result => {
         if (current) setCashFlow(result);
       })
@@ -306,13 +302,13 @@ function Dashboard({ onNavigate }) {
         if (current) setCashFlowError(error.message || 'Cash flow could not be loaded.');
       });
     return () => { current = false; };
-  }, [cashFlowDays]);
+  }, [dayFrom, dayTo]);
 
   useEffect(() => {
     let current = true;
     setUpcomingDuesList(null);
     setUpcomingDuesListError('');
-    accountingApi.dashboardUpcomingDuesList()
+    accountingApi.dashboardUpcomingDuesList(`?day_from=${dayFrom}&day_to=${dayTo}&as_of=${dayTo}&limit=3`)
       .then(result => {
         if (current) setUpcomingDuesList(result);
       })
@@ -320,13 +316,30 @@ function Dashboard({ onNavigate }) {
         if (current) setUpcomingDuesListError(error.message || 'Upcoming dues list could not be loaded.');
       });
     return () => { current = false; };
-  }, []);
+  }, [dayFrom, dayTo]);
+
+  useEffect(() => {
+    let current = true;
+    const previousDay = new Date(`${dayTo}T00:00:00`);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDayValue = localIsoDate(previousDay);
+    setOverdueDuesList(null);
+    setOverdueDuesListError('');
+    accountingApi.dashboardUpcomingDuesList(`?day_from=2000-01-01&day_to=${previousDayValue}&as_of=${dayTo}&limit=3`)
+      .then(result => {
+        if (current) setOverdueDuesList(result || { data: [], total: 0, total_amount_due: 0 });
+      })
+      .catch(error => {
+        if (current) setOverdueDuesListError(error.message || 'Overdue payments could not be loaded.');
+      });
+    return () => { current = false; };
+  }, [dayTo]);
 
   useEffect(() => {
     let current = true;
     setRecentActivity(null);
     setRecentActivityError('');
-    accountingApi.dashboardRecentActivity()
+    accountingApi.dashboardRecentActivity(`?day_from=${dayFrom}&day_to=${dayTo}&as_of=${dayTo}&limit=10`)
       .then(result => {
         if (current) setRecentActivity(result);
       })
@@ -334,51 +347,12 @@ function Dashboard({ onNavigate }) {
         if (current) setRecentActivityError(error.message || 'Recent activity could not be loaded.');
       });
     return () => { current = false; };
-  }, []);
+  }, [dayFrom, dayTo]);
 
-  useEffect(() => {
-    let current = true;
-    setDashboardAccounts(null);
-    setDashboardAccountsError('');
-    loadEveryPage(page => accountingApi.financialAccounts(`?active=1&page=${page}`))
-      .then(records => {
-        if (current) setDashboardAccounts(records.map(normalizeAccount).slice(0, 4));
-      })
-      .catch(error => {
-        if (current) setDashboardAccountsError(error.message || 'Financial accounts could not be loaded.');
-      });
-    return () => { current = false; };
-  }, []);
-
-  const applyDateFilter = event => {
-    event.preventDefault();
-    if (!draftDayFrom || !draftDayTo || draftDayFrom > draftDayTo) return;
-    setPeriod({ dayFrom: draftDayFrom, dayTo: draftDayTo });
-    setDateFilterOpen(false);
-  };
-
-  const resetToToday = () => {
-    const todayPeriod = dashboardPeriod('today');
-    setDraftDayFrom(todayPeriod.dayFrom);
-    setDraftDayTo(todayPeriod.dayTo);
-    setPeriod(todayPeriod);
-    setDateFilterOpen(false);
-  };
-
-  const applyPreset = preset => {
-    const nextPeriod = dashboardPeriod(preset);
-    setDraftDayFrom(nextPeriod.dayFrom);
-    setDraftDayTo(nextPeriod.dayTo);
-    setPeriod(nextPeriod);
-    setDateFilterOpen(false);
-  };
-
-  const toggleDateFilter = () => {
-    if (!dateFilterOpen) {
-      setDraftDayFrom(dayFrom);
-      setDraftDayTo(dayTo);
-    }
-    setDateFilterOpen(open => !open);
+  const changeDay = amount => {
+    const next = new Date(`${selectedDay}T00:00:00`);
+    next.setDate(next.getDate() + amount);
+    setSelectedDay(localIsoDate(next));
   };
 
   const totalCashBalance = cashBalance?.total_cash_balance == null ? Number.NaN : Number(cashBalance.total_cash_balance);
@@ -409,40 +383,33 @@ function Dashboard({ onNavigate }) {
   const cashFlowNet = cashFlow?.net_cash_flow == null ? Number.NaN : Number(cashFlow.net_cash_flow);
   const hasCashFlow = [cashFlowMoneyIn, cashFlowMoneyOut, cashFlowNet].every(Number.isFinite);
   const isToday = dayFrom === dayTo && dayTo === localIsoDate(new Date());
-  const periodLabel = isToday ? `Today · ${shortDate(dayTo, true)}` : dayFrom === dayTo ? shortDate(dayTo, true) : `${shortDate(dayFrom)} – ${shortDate(dayTo, true)}`;
-  const todayHeading = new Intl.DateTimeFormat('en-PH', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toUpperCase();
+  const periodLabel = isToday ? `Today · ${shortDate(dayTo, true)}` : shortDate(dayTo, true);
+  const selectedDayHeading = new Intl.DateTimeFormat('en-PH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${selectedDay}T00:00:00`)).toUpperCase();
+  const activityCount = Number(recentActivity?.total ?? recentActivity?.data?.length ?? 0);
+  const overdueCount = Number(overdueDuesList?.total ?? overdueDuesList?.data?.length ?? 0);
+  const overdueAmount = Number(overdueDuesList?.total_amount_due || 0);
 
   return <main className="content">
     <section className="welcome-row">
-      <div><p className="eyebrow">{todayHeading}</p><h1>Good morning, Ced.</h1><p>Here’s the financial pulse across your business today.</p></div>
-      <div className="dashboard-date-filter">
-        <button type="button" className="date-button" onClick={toggleDateFilter} aria-expanded={dateFilterOpen}><CalendarDays size={17}/>{periodLabel}<ChevronDown size={15}/></button>
-        {dateFilterOpen && <form className="date-filter-popover" onSubmit={applyDateFilter}>
-          <div className="date-filter-head"><div><strong>Dashboard period</strong><span>Today is used by default</span></div><button type="button" onClick={() => setDateFilterOpen(false)} aria-label="Close date filter"><X size={16}/></button></div>
-          <div className="date-filter-presets"><button type="button" onClick={() => applyPreset('today')}>Today</button><button type="button" onClick={() => applyPreset('week')}>This week</button><button type="button" onClick={() => applyPreset('month')}>This month</button></div>
-          <span className="date-filter-custom-label">Custom range</span>
-          <div className="date-filter-fields"><label>From<input type="date" value={draftDayFrom} onChange={event => setDraftDayFrom(event.target.value)}/></label><label>To<input type="date" value={draftDayTo} onChange={event => setDraftDayTo(event.target.value)}/></label></div>
-          {draftDayFrom && draftDayTo && draftDayFrom > draftDayTo && <p className="date-filter-error">The start date must be before the end date.</p>}
-          <div className="date-filter-actions"><button type="button" className="text-button" onClick={resetToToday}>Reset</button><button type="submit" className="primary-button" disabled={!draftDayFrom || !draftDayTo || draftDayFrom > draftDayTo}>Apply filter</button></div>
-        </form>}
-      </div>
+      <div><p className="eyebrow">{selectedDayHeading}</p><h1>{isToday ? 'Today’s activity' : 'Daily activity'}</h1><p>Collections, payments, dues, and account movements recorded on this day only.</p></div>
+      <div className="daily-date-control"><button type="button" onClick={() => changeDay(-1)} aria-label="Previous day"><ChevronDown size={16}/></button><label><CalendarDays size={16}/><input type="date" value={selectedDay} onChange={event => event.target.value && setSelectedDay(event.target.value)}/></label><button type="button" onClick={() => changeDay(1)} aria-label="Next day"><ChevronDown size={16}/></button>{!isToday && <button type="button" className="daily-today-button" onClick={() => setSelectedDay(localIsoDate(new Date()))}>Today</button>}</div>
     </section>
 
     <section className="metric-grid">
-      <AppLink href={pagePath('cash-balance')} className="metric-card featured" title={cashBalanceError || undefined}><div className="metric-top"><span>Total cash balance</span><div className="metric-icon"><WalletCards size={19}/></div></div><strong>{cashBalanceError ? 'Unavailable' : hasCashBalance ? peso.format(totalCashBalance) : 'Loading…'}</strong><div className="metric-foot">{cashBalanceError ? <span>Could not load balance</span> : cashBalance ? <><span className={changeClass}>{hasChange && <ChangeIcon size={14}/>} {hasChange ? `${Math.abs(changePercentage).toFixed(2)}%` : '—'}</span><span>from opening balance</span></> : <span>As of {shortDate(dayTo, true)}</span>}</div><div className="sparkline"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div></AppLink>
-      <AppLink href={pagePath('collections')} className="metric-card" title={collectionsError || undefined}><div className="metric-top"><span>Collections</span><div className="metric-icon pale-green"><ArrowDownLeft size={19}/></div></div><strong>{collectionsError ? 'Unavailable' : hasCollections ? peso.format(totalCollections) : 'Loading…'}</strong><div className="metric-foot">{collectionsError ? <span>Could not load collections</span> : collections ? <><span className={collectionsChangeClass}>{hasCollectionsChange && <CollectionsChangeIcon size={14}/>} {hasCollectionsChange ? `${Math.abs(collectionsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></AppLink>
-      <AppLink href={pagePath('payments')} className="metric-card" title={paymentsError || undefined}><div className="metric-top"><span>Payments</span><div className="metric-icon pale-amber"><ArrowUpRight size={19}/></div></div><strong>{paymentsError ? 'Unavailable' : hasPayments ? peso.format(totalPayments) : 'Loading…'}</strong><div className="metric-foot">{paymentsError ? <span>Could not load payments</span> : payments ? <><span className={paymentsChangeClass}>{hasPaymentsChange && <PaymentsChangeIcon size={14}/>} {hasPaymentsChange ? `${Math.abs(paymentsChange).toFixed(2)}%` : '—'}</span><span>vs. previous period</span></> : <span>{shortDate(dayFrom)} – {shortDate(dayTo, true)}</span>}</div></AppLink>
-      <AppLink href={pagePath('upcoming-dues')} className="metric-card" title={upcomingDuesError || undefined}><div className="metric-top"><span>Upcoming dues</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load upcoming dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>{isToday ? 'due today' : nearestDueDate ? `nearest ${shortDate(nearestDueDate)}` : 'selected period'}</span></> : <span>{periodLabel}</span>}</div></AppLink>
+      <AppLink href={pagePath('cash-balance')} className="metric-card featured" title={cashBalanceError || undefined}><div className="metric-top"><span>Available money</span><div className="metric-icon"><WalletCards size={19}/></div></div><strong>{cashBalanceError ? 'Unavailable' : hasCashBalance ? peso.format(totalCashBalance) : 'Loading…'}</strong><div className="metric-foot">{cashBalanceError ? <span>Could not load balance</span> : cashBalance ? <><span className={changeClass}>{hasChange && <ChangeIcon size={14}/>} {hasChange ? `${Math.abs(changePercentage).toFixed(2)}%` : '—'}</span><span>movement during this day</span></> : <span>As of {shortDate(dayTo, true)}</span>}</div></AppLink>
+      <AppLink href={pagePath('collections')} className="metric-card" title={collectionsError || undefined}><div className="metric-top"><span>Collected this day</span><div className="metric-icon pale-green"><ArrowDownLeft size={19}/></div></div><strong>{collectionsError ? 'Unavailable' : hasCollections ? peso.format(totalCollections) : 'Loading…'}</strong><div className="metric-foot">{collectionsError ? <span>Could not load collections</span> : collections ? <><span className={collectionsChangeClass}>{hasCollectionsChange && <CollectionsChangeIcon size={14}/>} {hasCollectionsChange ? `${Math.abs(collectionsChange).toFixed(2)}%` : '—'}</span><span>vs. previous day</span></> : <span>{periodLabel}</span>}</div></AppLink>
+      <AppLink href={pagePath('payments')} className="metric-card" title={paymentsError || undefined}><div className="metric-top"><span>Paid this day</span><div className="metric-icon pale-amber"><ArrowUpRight size={19}/></div></div><strong>{paymentsError ? 'Unavailable' : hasPayments ? peso.format(totalPayments) : 'Loading…'}</strong><div className="metric-foot">{paymentsError ? <span>Could not load payments</span> : payments ? <><span className={paymentsChangeClass}>{hasPaymentsChange && <PaymentsChangeIcon size={14}/>} {hasPaymentsChange ? `${Math.abs(paymentsChange).toFixed(2)}%` : '—'}</span><span>vs. previous day</span></> : <span>{periodLabel}</span>}</div></AppLink>
+      <AppLink href={pagePath('payables')} className="metric-card" title={upcomingDuesError || undefined}><div className="metric-top"><span>Due this day</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>due on {shortDate(selectedDay)}</span></> : <span>{periodLabel}</span>}</div></AppLink>
     </section>
 
     <section className="dashboard-grid">
-      <article className="panel cashflow-panel">
-        <div className="panel-head"><div><h2>Cash flow</h2><p>Money in and out across all accounts</p></div><label className="cashflow-period-control"><select value={cashFlowDays} onChange={event => setCashFlowDays(Number(event.target.value))} aria-label="Cash flow period"><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select><ChevronDown size={15}/></label></div>
-        {cashFlowError ? <div className="cashflow-state error-state"><CircleHelp size={19}/><span>{cashFlowError}</span></div> : !cashFlow || !hasCashFlow ? <div className="cashflow-state"><RefreshCw className="spin" size={19}/><span>Loading cash flow…</span></div> : <><div className="cashflow-summary"><div><span>Money in</span><strong>{peso.format(cashFlowMoneyIn)}</strong></div><div><span>Money out</span><strong>{peso.format(cashFlowMoneyOut)}</strong></div><div><span>Net cash flow</span><strong className={cashFlowNet > 0 ? 'green' : cashFlowNet < 0 ? 'red' : ''}>{cashFlowNet > 0 ? '+' : ''}{peso.format(cashFlowNet)}</strong></div></div><MiniChart dataPoints={cashFlow.points}/></>}
+      <article className="panel daily-movement-panel">
+        <div className="panel-head"><div><h2>Money movement</h2><p>Posted inflows and outflows on {shortDate(selectedDay, true)}</p></div><span className="daily-scope-badge"><CalendarDays size={13}/>One day only</span></div>
+        {cashFlowError ? <div className="cashflow-state error-state"><CircleHelp size={19}/><span>{cashFlowError}</span></div> : !cashFlow || !hasCashFlow ? <div className="cashflow-state"><RefreshCw className="spin" size={19}/><span>Loading daily movement…</span></div> : <div className="daily-movement-grid"><article className="in"><span><ArrowDownLeft size={16}/>Money in</span><strong>{peso.format(cashFlowMoneyIn)}</strong><small>Funds received on this day</small></article><article className="out"><span><ArrowUpRight size={16}/>Money out</span><strong>{peso.format(cashFlowMoneyOut)}</strong><small>Funds released on this day</small></article><article className={cashFlowNet < 0 ? 'net negative' : 'net'}><span><ArrowLeftRight size={16}/>Net movement</span><strong>{cashFlowNet > 0 ? '+' : ''}{peso.format(cashFlowNet)}</strong><small>{cashFlowNet > 0 ? 'More money entered than left' : cashFlowNet < 0 ? 'More money left than entered' : 'Inflows and outflows are balanced'}</small></article></div>}
       </article>
       <article className="panel obligations-panel">
-        <div className="panel-head"><div><h2>Upcoming dues</h2><p>Obligations requiring attention</p></div><AppLink href={pagePath('upcoming-dues')} className="link-button">View all</AppLink></div>
-        {upcomingDuesListError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{upcomingDuesListError}</span></div> : !upcomingDuesList ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading upcoming dues…</span></div> : upcomingDuesList.data?.length === 0 ? <div className="dashboard-panel-state"><Check size={19}/><span>No obligations due in the next 14 days.</span></div> : <div className="due-list">{(upcomingDuesList.data || []).map(item => {
+        <div className="panel-head"><div><h2>Due this day</h2><p>Unpaid obligations dated {shortDate(selectedDay, true)}</p></div><AppLink href={pagePath('payables')} className="link-button">Open payables</AppLink></div>
+        {upcomingDuesListError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{upcomingDuesListError}</span></div> : !upcomingDuesList ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading daily dues…</span></div> : upcomingDuesList.data?.length === 0 ? <div className="dashboard-panel-state daily-clear-state"><CheckCircle2 size={22}/><strong>No payments due</strong><span>Nothing is scheduled for this date.</span></div> : <div className="due-list">{(upcomingDuesList.data || []).map(item => {
           const urgent = item.is_overdue || Number(item.days_until_due) <= 3;
           return <div className="due-row" key={item.id}>
             <div className={`due-date ${urgent ? 'urgent' : ''}`}><strong>{item.due_day || item.due?.split(' ')[1]}</strong><span>{item.due_month || item.due?.split(' ')[0]}</span></div>
@@ -450,22 +417,16 @@ function Dashboard({ onNavigate }) {
             <div className="due-amount"><strong>{money(item.amount_due ?? item.amount, item.currency || 'PHP')}</strong><span className={urgent ? 'red' : ''}>{item.urgency || (item.is_overdue ? 'Overdue' : item.due)}</span></div>
           </div>;
         })}</div>}
+        <div className="dashboard-overdue-block">
+          <div className="dashboard-overdue-head"><span><CalendarDays size={14}/><strong>Overdue payments</strong></span>{overdueDuesList && <b>{overdueCount} unpaid · {peso.format(overdueAmount)}</b>}</div>
+          {overdueDuesListError ? <div className="dashboard-overdue-state error"><CircleHelp size={14}/><span>{overdueDuesListError}</span></div> : !overdueDuesList ? <div className="dashboard-overdue-state"><RefreshCw className="spin" size={14}/><span>Checking overdue payments…</span></div> : !Array.isArray(overdueDuesList.data) || overdueDuesList.data.length === 0 ? <div className="dashboard-overdue-state clear"><Check size={14}/><span>No overdue payments</span></div> : <div className="dashboard-overdue-list">{overdueDuesList.data.slice(0, 3).map(item => <div className="dashboard-overdue-row" key={`overdue-${item.id}`}><span><strong>{item.vendor || 'Obligation'}</strong><small>{item.ref || item.number || humanize(item.type || 'obligation')}</small></span><span><strong>{money(item.amount_due ?? item.amount ?? 0, item.currency || 'PHP')}</strong><small>{item.due_date ? `Due ${shortDate(item.due_date)}` : 'Past due'}</small></span></div>)}</div>}
+        </div>
       </article>
     </section>
 
-    <section className="dashboard-grid lower-grid">
-      <article className="panel accounts-panel">
-        <div className="panel-head"><div><h2>Financial accounts</h2><p>Live balances from posted journal lines</p></div><AppLink href={pagePath('accounts')} className="link-button">Manage accounts</AppLink></div>
-        {dashboardAccountsError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{dashboardAccountsError}</span></div> : !dashboardAccounts ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading financial accounts…</span></div> : dashboardAccounts.length === 0 ? <div className="dashboard-panel-state"><Landmark size={19}/><span>No active financial accounts.</span></div> : <div className="account-list">{dashboardAccounts.map(account => {
-          const displayBalance = account.isCredit ? -Math.abs(account.currentBalance) : account.currentBalance;
-          return <AppLink href={pagePath('accounts', account.id)} className="account-row" key={account.id}>
-            <span className="account-logo" style={{background: account.color}}>{account.initials}</span><span className="account-info"><strong>{account.name}</strong><span>{account.type} · {account.accountNumber}</span></span><span className="account-balance"><strong className={displayBalance < 0 ? 'red' : ''}>{money(displayBalance, account.currency || 'PHP')}</strong><span className="green">Active</span></span><ChevronRight size={17}/>
-          </AppLink>;
-        })}</div>}
-      </article>
-      <article className="panel activity-panel">
-        <div className="panel-head"><div><h2>Recent activity</h2><p>Latest activity from every branch</p></div><AppLink href={pagePath('payments')} className="link-button">View all</AppLink></div>
-        {recentActivityError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{recentActivityError}</span></div> : !recentActivity ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading recent activity…</span></div> : recentActivity.data?.length === 0 ? <div className="dashboard-panel-state"><Activity size={19}/><span>No recent activity.</span></div> : <div className="activity-list">{(recentActivity.data || []).map(item => {
+    <section className="panel activity-panel daily-activity-panel">
+        <div className="panel-head"><div><h2>Activity on this day</h2><p>Posted payments, collections, refunds, and transfers across every branch</p></div><span className="activity-count">{activityCount} transaction{activityCount === 1 ? '' : 's'}</span></div>
+        {recentActivityError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{recentActivityError}</span></div> : !recentActivity ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading daily activity…</span></div> : recentActivity.data?.length === 0 ? <div className="dashboard-panel-state daily-clear-state"><Activity size={22}/><strong>No activity recorded</strong><span>There are no posted transactions for {shortDate(selectedDay, true)}.</span></div> : <div className="activity-list">{(recentActivity.data || []).map(item => {
           const amount = Number(item.amount || 0);
           const isInflow = item.type === 'in';
           const displayAmount = item.type === 'out' ? -Math.abs(amount) : amount;
@@ -475,31 +436,215 @@ function Dashboard({ onNavigate }) {
             <div className="activity-amount"><strong className={isInflow && amount > 0 ? 'green' : ''}>{isInflow && amount > 0 ? '+' : ''}{money(displayAmount, item.currency || 'PHP')}</strong><span>{item.time || calendarDate(item.activity_date)}</span></div>
           </div>;
         })}</div>}
-      </article>
-    </section>
+      </section>
   </main>;
 }
 
 function StatusPill({ status }) { return <span className={`status ${status.toLowerCase()}`}>{status === 'Posted' && <Check size={12}/>} {status}</span>; }
 
-function PaymentsPage({ title = 'Payments', direction = null }) {
+function CollectionsPage() {
+  const today = localIsoDate(new Date());
   const [filter, setFilter] = useState('All');
-  const directionalActivity = direction ? activity.filter(item => item.type === direction) : activity;
-  const filtered = filter === 'All' ? directionalActivity : directionalActivity.filter(item => item.status === filter);
-  const totalVolume = directionalActivity.reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+  const [page, setPage] = useState(1);
+  const [payload, setPayload] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ page: String(page), per_page: '15' });
+      params.set('day_from', dateFrom);
+      params.set('day_to', dateTo);
+      if (filter !== 'All') params.set('status', filter.toLowerCase());
+      if (search.trim()) params.set('search', search.trim());
+      setLoading(true);
+      setError('');
+      accountingApi.collections(`?${params.toString()}`)
+        .then(response => current && setPayload(response))
+        .catch(requestError => current && setError(requestError.message || 'Collections could not be loaded.'))
+        .finally(() => current && setLoading(false));
+    }, search.trim() ? 250 : 0);
+
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [filter, search, dateFrom, dateTo, page]);
+
+  const summary = payload?.summary || {};
+  const records = Array.isArray(payload?.data) ? payload.data : [];
+  const currentPage = Number(payload?.current_page || page);
+  const lastPage = Number(payload?.last_page || 1);
+  const changeFilter = value => {
+    setFilter(value);
+    setPage(1);
+  };
+  const changeSearch = event => {
+    setSearch(event.target.value);
+    setPage(1);
+  };
+  const changeDateFrom = event => {
+    const value = event.target.value;
+    setDateFrom(value);
+    if (dateTo < value) setDateTo(value);
+    setPage(1);
+  };
+  const changeDateTo = event => {
+    const value = event.target.value;
+    setDateTo(value);
+    if (dateFrom > value) setDateFrom(value);
+    setPage(1);
+  };
+  const showToday = () => {
+    setDateFrom(today);
+    setDateTo(today);
+    setPage(1);
+  };
+  const isDaily = dateFrom === dateTo;
+  const periodLabel = isDaily ? calendarDate(dateFrom) : `${calendarDate(dateFrom)} – ${calendarDate(dateTo)}`;
+
+  return <main className="content inner-page">
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Daily collections</h1><p>Track incoming customer collections by day or across a selected date range.</p></div><button className="secondary-button"><Download size={17}/>Export</button></div>
+    <section className="summary-strip"><div><span>{isDaily ? 'Daily volume' : 'Range volume'}</span><strong>{peso.format(Number(summary.total_volume || 0))}</strong><small className="collection-period-label">{periodLabel}</small></div><div><span>Transactions</span><strong>{Number(summary.transaction_count || 0)}</strong></div><div><span>Needs review</span><strong className="amber">{Number(summary.needs_review_count || 0)}</strong></div><div><span>Posted</span><strong>{Number(summary.posted_count || 0)}</strong></div></section>
+    <section className="panel table-panel">
+      <div className="table-toolbar collection-toolbar"><div className="segmented">{['All','Posted','Review'].map(value => <button key={value} className={filter === value ? 'active' : ''} onClick={() => changeFilter(value)}>{value}</button>)}</div><div className="toolbar-right collection-toolbar-right"><label className="collection-date-filter"><span>Date from</span><input type="date" value={dateFrom} max={dateTo} onChange={changeDateFrom}/></label><label className="collection-date-filter"><span>Date to</span><input type="date" value={dateTo} min={dateFrom} onChange={changeDateTo}/></label>{(dateFrom !== today || dateTo !== today) && <button type="button" className="collection-today-button" onClick={showToday}>Today</button>}<label className="small-search collection-search"><Search size={16}/><input value={search} onChange={changeSearch} placeholder="Search customer, order, account…"/></label></div></div>
+      {loading && !payload && <div className="account-state"><RefreshCw className="spin" size={22}/><h2>Loading collections…</h2></div>}
+      {!loading && error && <div className="account-state error-state"><CircleHelp size={22}/><h2>Collections could not be loaded</h2><p>{error}</p></div>}
+      {!error && payload && <>
+        <div className="data-table"><div className="table-row table-head"><span>Customer / reference</span><span>Branch</span><span>Account / method</span><span>Date</span><span>Status</span><span>Amount</span></div>
+          {records.map(item => {
+            const line = item.receiving_lines?.[0];
+            const account = line?.financial_account;
+            const method = line?.payment_method;
+            const externalOrderId = item.sales_invoice?.external_order_id;
+            const reference = externalOrderId ? `Order #${externalOrderId}` : item.sales_invoice?.number || item.reference || item.number;
+            const extraAccounts = Math.max(0, Number(item.receiving_lines?.length || 0) - 1);
+            return <div className="table-row" key={item.id}><span><strong>{item.customer?.name || 'Customer payment'}</strong><small>{reference}</small></span><span>{item.branch?.name || '—'}</span><span><strong>{account?.name || '—'}{extraAccounts ? ` +${extraAccounts}` : ''}</strong><small>{[method?.name, account?.masked_account_number].filter(Boolean).join(' · ') || '—'}</small></span><span>{calendarDate(item.payment_date)}</span><span><StatusPill status={item.status === 'review' ? 'Review' : 'Posted'}/></span><span className="green"><strong>{money(item.amount, item.currency || 'PHP')}</strong></span></div>;
+          })}
+        </div>
+        {records.length === 0 && <div className="account-state"><ArrowDownLeft size={22}/><h2>No collections found</h2><p>No customer collections matched {periodLabel}. Try another date range, status, or search term.</p></div>}
+        {lastPage > 1 && <div className="transfer-pagination"><button className="secondary-button" disabled={currentPage <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button><span>Page {currentPage} of {lastPage}</span><button className="secondary-button" disabled={currentPage >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))}>Next</button></div>}
+      </>}
+    </section>
+  </main>;
+}
+
+function PaymentsPage({ title = 'Payments', direction = null }) {
+  const today = localIsoDate(new Date());
+  const [filter, setFilter] = useState('All');
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+  const [page, setPage] = useState(1);
+  const [payload, setPayload] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ page: String(page), per_page: '15', active: '1' });
+      params.set('day_from', dateFrom);
+      params.set('day_to', dateTo);
+      if (direction) params.set('direction', direction === 'out' ? 'outflow' : 'inflow');
+      if (filter !== 'All') params.set('status', filter.toLowerCase());
+      if (search.trim()) params.set('search', search.trim());
+      setLoading(true);
+      setError('');
+      accountingApi.paymentRecords(`?${params.toString()}`)
+        .then(response => current && setPayload(response))
+        .catch(requestError => current && setError(requestError.message || 'Payments could not be loaded.'))
+        .finally(() => current && setLoading(false));
+    }, search.trim() ? 250 : 0);
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [direction, filter, search, dateFrom, dateTo, page]);
+  const summary = payload?.summary || {};
+  const records = Array.isArray(payload?.data) ? payload.data : [];
+  const currentPage = Number(payload?.current_page || page);
+  const lastPage = Number(payload?.last_page || 1);
+  const changeFilter = value => {
+    setFilter(value);
+    setPage(1);
+  };
+  const changeSearch = event => {
+    setSearch(event.target.value);
+    setPage(1);
+  };
+  const changeDateFrom = event => {
+    const value = event.target.value;
+    setDateFrom(value);
+    if (dateTo < value) setDateTo(value);
+    setPage(1);
+  };
+  const changeDateTo = event => {
+    const value = event.target.value;
+    setDateTo(value);
+    if (dateFrom > value) setDateFrom(value);
+    setPage(1);
+  };
+  const showToday = () => {
+    setDateFrom(today);
+    setDateTo(today);
+    setPage(1);
+  };
+  const isDaily = dateFrom === dateTo;
+  const periodLabel = isDaily ? calendarDate(dateFrom) : `${calendarDate(dateFrom)} – ${calendarDate(dateTo)}`;
   const description = direction === 'in'
     ? 'Track incoming customer collections across every branch and financial account.'
     : direction === 'out'
       ? 'Track outgoing supplier, expense, and direct-account payments.'
       : 'Monitor money movement across every branch and financial account.';
   return <main className="content inner-page">
-    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>{title}</h1><p>{description}</p></div><button className="secondary-button"><Download size={17}/>Export</button></div>
-    <section className="summary-strip"><div><span>Total volume</span><strong>{peso.format(totalVolume)}</strong></div><div><span>Transactions</span><strong>{directionalActivity.length}</strong></div><div><span>Needs review</span><strong className="amber">{directionalActivity.filter(item => item.status === 'Review').length}</strong></div><div><span>Posted</span><strong>{directionalActivity.filter(item => item.status === 'Posted').length}</strong></div></section>
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>{title === 'Payments' ? 'Daily payments' : title}</h1><p>{description}</p></div><button className="secondary-button"><Download size={17}/>Export</button></div>
+    <section className="summary-strip"><div><span>{isDaily ? 'Daily payment events' : 'Payment events'}</span><strong>{peso.format(Number(summary.total_volume || 0))}</strong><small className="collection-period-label">{periodLabel}</small></div><div><span>Transactions</span><strong>{Number(summary.transaction_count || 0)}</strong></div><div><span>Needs review</span><strong className="amber">{Number(summary.needs_review_count || 0)}</strong></div><div><span>Posted</span><strong>{Number(summary.posted_count || 0)}</strong></div></section>
+    <section className="summary-strip payment-breakdown"><div><span>Credit-card charges</span><strong>{peso.format(Number(summary.card_charge_volume || 0))}</strong><small>Supplier or direct purchases charged to cards</small></div><div><span>Card settlements</span><strong>{peso.format(Number(summary.card_settlement_volume || 0))}</strong><small>Bank payments clearing card statements</small></div><div><span>Cheques issued</span><strong>{peso.format(Number(summary.cheque_volume || 0))}</strong><small>Tracked separately until marked paid</small></div><div><span>Cash / bank payments</span><strong>{peso.format(Number(summary.cash_payment_volume || 0))}</strong><small>Other outgoing account payments</small></div></section>
     <section className="panel table-panel">
-      <div className="table-toolbar"><div className="segmented">{['All','Posted','Review'].map(x => <button key={x} className={filter === x ? 'active' : ''} onClick={() => setFilter(x)}>{x}</button>)}</div><div className="toolbar-right"><label className="small-search"><Search size={16}/><input placeholder="Search transactions"/></label><button className="icon-text"><SlidersHorizontal size={16}/>Filter</button></div></div>
+      <div className="table-toolbar collection-toolbar"><div className="segmented">{['All','Posted','Review'].map(x => <button key={x} className={filter === x ? 'active' : ''} onClick={() => changeFilter(x)}>{x}</button>)}</div><div className="toolbar-right collection-toolbar-right"><label className="collection-date-filter"><span>Date from</span><input type="date" value={dateFrom} max={dateTo} onChange={changeDateFrom}/></label><label className="collection-date-filter"><span>Date to</span><input type="date" value={dateTo} min={dateFrom} onChange={changeDateTo}/></label>{(dateFrom !== today || dateTo !== today) && <button type="button" className="collection-today-button" onClick={showToday}>Today</button>}<label className="small-search collection-search"><Search size={16}/><input value={search} onChange={changeSearch} placeholder="Search transaction, supplier, account…"/></label></div></div>
+      {loading && !payload && <div className="account-state"><RefreshCw className="spin" size={22}/><h2>Loading payments…</h2></div>}
+      {!loading && error && <div className="account-state error-state"><CircleHelp size={22}/><h2>Payments could not be loaded</h2><p>{error}</p></div>}
+      {!error && payload && <>
       <div className="data-table"><div className="table-row table-head"><span>Transaction</span><span>Branch</span><span>Account</span><span>Date</span><span>Status</span><span>Amount</span></div>
-        {filtered.map((item,i) => <div className="table-row" key={i}><span><strong>{item.title}</strong><small>{item.meta.split(' · ').at(-1)}</small></span><span>{item.meta.split(' · ')[0]}</span><span>{item.account}</span><span>{item.time}</span><span><StatusPill status={item.status}/></span><span className={item.amount > 0 && item.type === 'in' ? 'green' : ''}><strong>{peso.format(item.amount)}</strong></span></div>)}
+        {records.map(item => {
+          const line = item.lines?.[0];
+          const extraAccounts = Math.max(0, Number(item.lines?.length || 0) - 1);
+          const methodType = line?.payment_method?.type;
+          const isCardSettlement = item.allocations?.some(allocation => allocation.obligation?.type === 'credit_card_statement') || String(item.memo || '').startsWith('Credit card payment for ');
+          const isCardCharge = !isCardSettlement && methodType === 'credit_card';
+          const isCheque = methodType === 'cheque';
+          const paymentKind = isCardSettlement
+            ? { label: 'Card settlement', className: 'card-settlement' }
+            : isCardCharge
+              ? { label: 'Credit-card charge', className: 'card-charge' }
+              : isCheque
+                ? { label: 'Cheque issued', className: 'cheque-issued' }
+                : { label: 'Cash / bank payment', className: 'cash-payment' };
+          const transactionTitle = isCardSettlement
+            ? 'Credit-card statement payment'
+            : isCardCharge && item.type === 'purchase_order'
+              ? 'Supplier card payment'
+              : isCardCharge
+                ? 'Credit-card purchase'
+                : isCheque && item.type === 'purchase_order'
+                  ? 'Supplier cheque payment'
+                  : item.type === 'purchase_order'
+                    ? 'Supplier payment'
+                    : item.type === 'expense'
+                      ? 'Expense payment'
+                      : 'Direct-account payment';
+          const reference = item.purchase_order?.number || item.expense?.number || item.number;
+          const status = item.status === 'draft' ? 'Review' : 'Posted';
+          return <div className="table-row" key={item.id}><span><strong>{transactionTitle}</strong><small>{reference}</small><em className={`payment-kind ${paymentKind.className}`}>{paymentKind.label}</em></span><span>{item.branch?.name || '—'}</span><span><strong>{line?.financial_account?.name || '—'}{extraAccounts ? ` +${extraAccounts}` : ''}</strong><small>{[line?.payment_method?.name, line?.financial_account?.masked_account_number].filter(Boolean).join(' · ') || '—'}</small></span><span>{calendarDate(item.payment_date)}</span><span><StatusPill status={status}/></span><span><strong>{money(-Math.abs(Number(item.amount || 0)), item.currency || 'PHP')}</strong></span></div>;
+        })}
       </div>
+      {records.length === 0 && <div className="account-state"><ArrowUpRight size={22}/><h2>No payments found</h2><p>No payments matched {periodLabel}. Try another date range, status, or search term.</p></div>}
+      {lastPage > 1 && <div className="transfer-pagination"><button className="secondary-button" disabled={currentPage <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button><span>Page {currentPage} of {lastPage}</span><button className="secondary-button" disabled={currentPage >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))}>Next</button></div>}
+      </>}
     </section>
   </main>;
 }
@@ -508,19 +653,166 @@ function CashBalancePage({ onOpenAccount }) {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
     let current = true;
-    loadEveryPage(page => accountingApi.financialAccounts(`?page=${page}`))
-      .then(records => current && setAccounts(records.map(normalizeAccount).filter(account => !account.isCredit)))
-      .catch(requestError => current && setError(requestError.message || 'Cash balances could not be loaded.'))
+    setLoading(true);
+    setError('');
+    loadEveryPage(page => accountingApi.financialAccounts(`?active=1&page=${page}`))
+      .then(records => current && setAccounts(records
+        .map(normalizeAccount)
+        .filter(account => ['cash', 'e_wallet', 'bank_account', 'checking_account'].includes(String(account.kind || '').toLowerCase()))))
+      .catch(requestError => current && setError(requestError.message || 'Balances could not be loaded.'))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
-  }, []);
+  }, [refreshVersion]);
 
-  const total = accounts.reduce((sum, account) => sum + account.currentBalance, 0);
-  const available = accounts.reduce((sum, account) => sum + account.availableBalance, 0);
-  return <main className="content inner-page"><div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Total cash balance</h1><p>Current balances across cash, bank, checking, and e-wallet accounts.</p></div><AppLink href={pagePath('accounts')} className="secondary-button"><Landmark size={16}/>Manage accounts</AppLink></div><section className="summary-strip module-summary"><div><span>Current balance</span><strong>{peso.format(total)}</strong></div><div><span>Available balance</span><strong>{peso.format(available)}</strong></div><div><span>Active cash accounts</span><strong>{accounts.length}</strong></div></section>{loading && <section className="panel account-state"><RefreshCw className="spin" size={22}/><h2>Loading balances…</h2></section>}{!loading && error && <section className="panel account-state error-state"><CircleHelp size={22}/><h2>Balances could not be loaded</h2><p>{error}</p></section>}{!loading && !error && <section className="account-cards account-list-page">{accounts.map(account => <AppLink href={pagePath('accounts', account.id)} className="big-account-card" key={account.id}><span className="account-logo large" style={{background: account.color}}>{account.initials}</span><span><small>{account.type}</small><strong>{account.name}</strong><em>{account.accountNumber}</em></span><span className="card-balance"><small>Current balance</small><strong>{peso.format(account.currentBalance)}</strong></span><ChevronRight size={17}/></AppLink>)}</section>}</main>;
+  const definitions = [
+    { key: 'cash', label: 'Cash', kinds: ['cash'], Icon: Banknote },
+    { key: 'e_wallet', label: 'E-wallet', kinds: ['e_wallet'], Icon: WalletCards },
+    { key: 'online', label: 'Online / bank', kinds: ['bank_account'], Icon: Globe2 },
+    { key: 'cheque', label: 'Cheque accounts', kinds: ['checking_account'], Icon: ReceiptText },
+  ];
+  const accountCategory = account => definitions.find(definition => definition.kinds.includes(String(account.kind || '').toLowerCase())) || definitions[0];
+  const summaries = definitions.map(definition => {
+    const matching = accounts.filter(account => definition.kinds.includes(String(account.kind || '').toLowerCase()));
+    return { ...definition, count: matching.length, total: matching.reduce((sum, account) => sum + account.availableBalance, 0) };
+  });
+  const total = summaries.reduce((sum, summary) => sum + summary.total, 0);
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleAccounts = accounts.filter(account => {
+    const category = accountCategory(account);
+    const matchesType = typeFilter === 'all' || category.key === typeFilter;
+    const matchesSearch = !normalizedSearch || [account.name, account.holderName, account.accountNumber, financialAccountInstitutionName(account), category.label]
+      .some(value => String(value || '').toLowerCase().includes(normalizedSearch));
+    return matchesType && matchesSearch;
+  }).sort((left, right) => accountCategory(left).label.localeCompare(accountCategory(right).label) || left.name.localeCompare(right.name));
+
+  return <main className="content inner-page balances-page">
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Balances</h1><p>Monitor all available cash, e-wallet, online-transfer, and cheque-account funds in one place.</p></div><div className="balances-title-actions"><button type="button" className="secondary-button" onClick={() => setRefreshVersion(value => value + 1)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button><AppLink href={pagePath('accounts')} className="secondary-button"><Landmark size={16}/>Manage accounts</AppLink></div></div>
+    <section className="balances-total"><div><span>Total available money</span><strong>{peso.format(total)}</strong><small>Across {accounts.length} active liquid account{accounts.length === 1 ? '' : 's'}</small></div><div className="balances-total-note"><ShieldCheck size={18}/><span>Credit cards and loan limits are excluded. This view contains only money your business currently holds.</span></div></section>
+    <section className="balance-type-grid">{summaries.map(summary => { const SummaryIcon = summary.Icon; return <button type="button" className={`balance-type-card ${typeFilter === summary.key ? 'active' : ''}`} key={summary.key} onClick={() => setTypeFilter(current => current === summary.key ? 'all' : summary.key)}><span><SummaryIcon size={18}/></span><div><small>{summary.label}</small><strong>{peso.format(summary.total)}</strong><em>{summary.count} account{summary.count === 1 ? '' : 's'}</em></div></button>; })}</section>
+    <section className="panel balances-panel">
+      <div className="balances-toolbar"><div><h2>All money accounts</h2><p>Select an account to review its deposits, debits, and running balance.</p></div><div className="balances-filters"><div className="segmented">{[{ key: 'all', label: 'All' }, ...definitions].map(option => <button type="button" key={option.key} className={typeFilter === option.key ? 'active' : ''} onClick={() => setTypeFilter(option.key)}>{option.label}</button>)}</div><label className="small-search balances-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search account, bank, or number"/></label></div></div>
+      {loading && <div className="account-state"><RefreshCw className="spin" size={22}/><h2>Loading balances…</h2></div>}
+      {!loading && error && <div className="account-state error-state"><CircleHelp size={22}/><h2>Balances could not be loaded</h2><p>{error}</p></div>}
+      {!loading && !error && visibleAccounts.length === 0 && <div className="account-state"><WalletCards size={22}/><h2>No accounts found</h2><p>Try another account type or search term.</p></div>}
+      {!loading && !error && visibleAccounts.length > 0 && <div className="balances-table"><div className="balances-row head"><span>Account</span><span>Payment type</span><span>Institution / owner</span><span>Account number</span><span>Available balance</span><span/></div>{visibleAccounts.map(account => { const category = accountCategory(account); const TypeIcon = category.Icon; const institution = financialAccountInstitutionName(account); return <AppLink href={pagePath('accounts', account.id)} className="balances-row" key={account.id}><span className="balances-account"><i className="account-logo" style={{background: account.color}}>{account.initials}</i><span><strong>{account.name}</strong><small>{account.is_company_wide ? 'Company-wide' : account.owner_branch?.name || 'Selected branches'}</small></span></span><span className="balances-kind"><i><TypeIcon size={15}/></i><strong>{category.label}</strong></span><span><strong>{institution || account.holderName || 'Internal account'}</strong><small>{institution && account.holderName !== 'Not provided' ? account.holderName : 'Business funds'}</small></span><span><strong>{account.accountNumber}</strong><small>{account.currency || 'PHP'}</small></span><span className="balances-amount"><strong>{money(account.availableBalance, account.currency || 'PHP')}</strong><small>{balanceUpdatedLabel(account.balanceUpdatedAt)}</small></span><span><ChevronRight size={17}/></span></AppLink>; })}</div>}
+    </section>
+  </main>;
+}
+
+function payableMonthBounds(monthValue) {
+  const [year, month] = monthValue.split('-').map(Number);
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0);
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
+function PayablesPage() {
+  const currentMonth = localIsoDate(new Date()).slice(0, 7);
+  const [month, setMonth] = useState(currentMonth);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [source, setSource] = useState({ cards: [], loans: [], loanDues: [], cheques: [] });
+  const bounds = payableMonthBounds(month);
+
+  useEffect(() => {
+    let current = true;
+    const asOf = localIsoDate(new Date());
+    setLoading(true);
+    setError('');
+    Promise.all([
+      loadEveryPage(page => accountingApi.obligations(`?type=credit_card_statement&page=${page}`)),
+      loadEveryPage(page => accountingApi.loanList(`?direction=borrowed&status=active&as_of_date=${asOf}&per_page=100&page=${page}`)),
+      accountingApi.loanInstallmentUpcomingDues(`?day_from=${bounds.start}&day_to=${bounds.end}&as_of_date=${asOf}&direction=borrowed&include_overdue=0&limit=100`),
+      loadEveryPage(page => accountingApi.cheques(`?status=outstanding&per_page=100&page=${page}`)),
+    ]).then(([cards, loans, loanDues, cheques]) => {
+      if (!current) return;
+      setSource({
+        cards: cards.filter(item => ['open', 'partially_paid', 'overdue'].includes(item.status) && Number(item.balance_due || 0) > 0),
+        loans: loans.filter(item => Number(item.balance_amount ?? item.balance_due ?? 0) > 0),
+        loanDues: apiRecords(loanDues),
+        cheques: cheques.filter(item => ['pending', 'deposited'].includes(item.status) && Number(item.amount || 0) > 0),
+      });
+    }).catch(requestError => current && setError(requestError.message || 'Payables could not be loaded.'))
+      .finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, [month, refreshVersion]);
+
+  const withinMonth = date => date && date >= bounds.start && date <= bounds.end;
+  const definitions = [
+    { key: 'credit-card', label: 'Credit cards', Icon: CreditCard, href: pagePath('credit-cards', null, { view: 'upcoming' }) },
+    { key: 'loan', label: 'Loans', Icon: HandCoins, href: pagePath('loans', null, { view: 'upcoming' }) },
+    { key: 'cheque', label: 'Cheques', Icon: Banknote, href: pagePath('cheques', null, { view: 'due' }) },
+  ];
+  const cardRows = source.cards.filter(item => withinMonth(item.due_date)).map(item => ({
+    key: `card-${item.id}`,
+    type: 'credit-card',
+    title: item.financial_account?.name || 'Credit card statement',
+    detail: item.financial_account?.institution?.name || item.number || 'Credit card',
+    reference: item.number || item.source_reference || `Statement ${item.id}`,
+    dueDate: item.due_date,
+    amount: Number(item.balance_due || 0),
+    currency: item.currency || 'PHP',
+    status: item.status,
+    href: item.financial_account_id ? pagePath('credit-cards', item.financial_account_id) : pagePath('credit-cards', null, { view: 'upcoming' }),
+  }));
+  const loanRows = source.loanDues.map(item => ({
+    key: `loan-${item.id}`,
+    type: 'loan',
+    title: item.loan_number || item.loan?.number || `Loan ${item.loan_id}`,
+    detail: item.party || item.display_person || item.financial_account || 'Borrowed loan',
+    reference: `Installment ${item.installment_number || '—'} of ${item.term_months || '—'}`,
+    dueDate: item.due_date,
+    amount: Number(item.amount_due || 0),
+    currency: item.currency || 'PHP',
+    status: item.status || (item.is_overdue ? 'overdue' : 'unpaid'),
+    href: pagePath('loans', item.loan_id),
+  }));
+  const chequeRows = source.cheques.filter(item => withinMonth(item.due_date)).map(item => ({
+    key: `cheque-${item.id}`,
+    type: 'cheque',
+    title: item.cheque_number || `Cheque ${item.id}`,
+    detail: item.financial_account?.name || item.counterparty?.name || 'Cheque account',
+    reference: item.counterparty?.name || item.payment?.number || 'Outgoing cheque',
+    dueDate: item.due_date,
+    amount: Number(item.amount || 0),
+    currency: item.currency || 'PHP',
+    status: item.monitoring_status || item.status,
+    href: pagePath('cheques', null, { view: 'due' }),
+  }));
+  const monthlyRows = [...cardRows, ...loanRows, ...chequeRows].sort((left, right) => String(left.dueDate).localeCompare(String(right.dueDate)) || left.title.localeCompare(right.title));
+  const overallByType = {
+    'credit-card': source.cards.reduce((total, item) => total + Number(item.balance_due || 0), 0),
+    loan: source.loans.reduce((total, item) => total + Number(item.balance_amount ?? item.balance_due ?? 0), 0),
+    cheque: source.cheques.reduce((total, item) => total + Number(item.amount || 0), 0),
+  };
+  const monthByType = monthlyRows.reduce((totals, item) => ({ ...totals, [item.type]: (totals[item.type] || 0) + item.amount }), {});
+  const overallTotal = Object.values(overallByType).reduce((total, value) => total + value, 0);
+  const monthlyTotal = monthlyRows.reduce((total, item) => total + item.amount, 0);
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleRows = monthlyRows.filter(item => (typeFilter === 'all' || item.type === typeFilter) && (!normalizedSearch || [item.title, item.detail, item.reference, item.status].some(value => String(value || '').toLowerCase().includes(normalizedSearch))));
+  const selectedMonthLabel = new Intl.DateTimeFormat('en-PH', { month: 'long', year: 'numeric' }).format(new Date(`${bounds.start}T00:00:00`));
+
+  return <main className="content inner-page payables-page">
+    <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Payables</h1><p>Monitor unpaid credit-card statements, borrowed-loan installments, and outstanding cheques.</p></div><div className="payables-title-actions"><label>Payable month<input type="month" value={month} onChange={event => setMonth(event.target.value || currentMonth)}/></label><button type="button" className="secondary-button" onClick={() => setRefreshVersion(value => value + 1)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div></div>
+    <section className="payables-overview"><article className="overall"><span>Overall unpaid payables</span><strong>{peso.format(overallTotal)}</strong><small>All unpaid balances, regardless of due date</small></article><article className="monthly"><span>Payable within {selectedMonthLabel}</span><strong>{peso.format(monthlyTotal)}</strong><small>{monthlyRows.length} due item{monthlyRows.length === 1 ? '' : 's'} within this month only</small></article></section>
+    <section className="payable-type-grid">{definitions.map(definition => { const TypeIcon = definition.Icon; const count = monthlyRows.filter(item => item.type === definition.key).length; return <button type="button" className={`payable-type-card ${typeFilter === definition.key ? 'active' : ''}`} key={definition.key} onClick={() => setTypeFilter(current => current === definition.key ? 'all' : definition.key)}><span><TypeIcon size={18}/></span><div><small>{definition.label}</small><strong>{peso.format(monthByType[definition.key] || 0)}</strong><em>{count} due this month · {peso.format(overallByType[definition.key] || 0)} overall</em></div></button>; })}</section>
+    <section className="panel payables-panel">
+      <div className="payables-toolbar"><div><h2>{selectedMonthLabel} payables</h2><p>The table intentionally shows only items due inside the selected month.</p></div><div className="payables-filters"><div className="segmented">{[{ key: 'all', label: 'All' }, ...definitions].map(option => <button type="button" key={option.key} className={typeFilter === option.key ? 'active' : ''} onClick={() => setTypeFilter(option.key)}>{option.label}</button>)}</div><label className="small-search payables-search"><Search size={16}/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search account or reference"/></label></div></div>
+      {loading && <div className="account-state"><RefreshCw className="spin" size={22}/><h2>Loading payables…</h2><p>Combining credit-card, loan, and cheque dues.</p></div>}
+      {!loading && error && <div className="account-state error-state"><CircleHelp size={22}/><h2>Payables could not be loaded</h2><p>{error}</p></div>}
+      {!loading && !error && visibleRows.length === 0 && <div className="account-state"><CheckCircle2 size={23}/><h2>No payables found</h2><p>No unpaid items match {selectedMonthLabel} and the selected filters.</p></div>}
+      {!loading && !error && visibleRows.length > 0 && <div className="payables-table"><div className="payables-row head"><span>Payable</span><span>Type</span><span>Due date</span><span>Status</span><span>Amount due</span><span/></div>{visibleRows.map(item => { const definition = definitions.find(option => option.key === item.type); const TypeIcon = definition.Icon; const dueDate = new Date(`${item.dueDate}T00:00:00`); const overdue = item.dueDate < localIsoDate(new Date()); return <AppLink href={item.href} className={`payables-row ${overdue ? 'overdue' : ''}`} key={item.key}><span><strong>{item.title}</strong><small>{item.detail}</small><em>{item.reference}</em></span><span className="payables-kind"><i><TypeIcon size={15}/></i><strong>{definition.label}</strong></span><span className="payables-date"><strong>{dueDate.toLocaleDateString('en-PH', { day: '2-digit', month: 'short', year: 'numeric' })}</strong><small>{overdue ? 'Past due' : 'Scheduled'}</small></span><span><b className={`payable-status ${overdue ? 'overdue' : item.status}`}>{overdue ? 'Overdue' : humanize(item.status)}</b></span><span className="payables-amount"><strong>{money(item.amount, item.currency)}</strong><small>Unpaid</small></span><span><ChevronRight size={17}/></span></AppLink>; })}</div>}
+    </section>
+  </main>;
 }
 
 function LiveRecordsPage({ eyebrow, title, description, Icon, columns, loadRecords, rowValues, emptyMessage }) {
@@ -589,6 +881,7 @@ function TransfersPage({ onViewHistory }) {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [createdTransfer, setCreatedTransfer] = useState(null);
+  const transferSubmitLock = useRef(false);
 
   const loadAccounts = () => loadEveryPage(page => accountingApi.financialAccounts(`?active=1&page=${page}`))
     .then(records => records.map(normalizeAccount));
@@ -629,8 +922,31 @@ function TransfersPage({ onViewHistory }) {
   const transferEnabled = account => !account.applications?.length || account.applications.some(application => application.application === 'account_transfer' || application.type?.code === 'account_transfer');
   const compatibleKinds = form.transfer_method === 'cash' ? ['cash'] : form.transfer_method === 'e_wallet' ? ['e_wallet'] : form.transfer_method === 'cheque' ? ['checking_account'] : ['bank_account', 'checking_account'];
   const sourceAccounts = accounts.filter(account => !account.isCredit && compatibleKinds.includes(account.kind) && account.usable_for_payments !== false && transferEnabled(account));
+  const availableSourceAccounts = sourceAccounts.filter(account => Number(account.availableBalance ?? 0) > 0);
+  const unavailableSourceAccounts = sourceAccounts.filter(account => Number(account.availableBalance ?? 0) <= 0);
   const selectedSource = accounts.find(account => String(account.id) === String(form.source_financial_account_id));
   const destinationAccounts = accounts.filter(account => !account.isCredit && String(account.id) !== String(form.source_financial_account_id) && account.currency === form.currency && account.usable_for_receipts !== false && transferEnabled(account));
+  const sortAccountsByInstitution = (left, right) => {
+    const institutionComparison = (financialAccountInstitutionName(left) || 'Other').localeCompare(
+      financialAccountInstitutionName(right) || 'Other',
+      'en',
+      { sensitivity: 'base' },
+    );
+    return institutionComparison || String(left.name || '').localeCompare(String(right.name || ''), 'en', { sensitivity: 'base' });
+  };
+  const destinationAccountGroups = [
+    { key: 'cash', label: 'Cash', kinds: ['cash'] },
+    { key: 'online', label: 'Online / Bank', kinds: ['bank_account'] },
+    { key: 'wallet', label: 'E-wallet', kinds: ['e_wallet'] },
+    { key: 'cheque', label: 'Cheque / Checking', kinds: ['checking_account'] },
+  ].map(group => ({
+    ...group,
+    accounts: destinationAccounts.filter(account => group.kinds.includes(account.kind)).sort(sortAccountsByInstitution),
+  }));
+  const groupedDestinationIds = new Set(destinationAccountGroups.flatMap(group => group.accounts.map(account => String(account.id))));
+  const otherDestinationAccounts = destinationAccounts
+    .filter(account => !groupedDestinationIds.has(String(account.id)))
+    .sort(sortAccountsByInstitution);
   const selectedDestination = accounts.find(account => String(account.id) === String(form.destination_financial_account_id));
   const availableOffsetAccounts = chartAccounts.filter(account => String(account.id) !== String(selectedSource?.chart_account_id));
   const externalOffsetAccount = availableOffsetAccounts.find(account => account.code === '5000' || /\bgeneral expense\b/i.test(account.name || ''))
@@ -640,7 +956,9 @@ function TransfersPage({ onViewHistory }) {
   const walletInstitutions = institutions.filter(isWalletInstitution);
   const bankInstitutions = institutions.filter(institution => !isWalletInstitution(institution));
   const numericAmount = Number(form.amount || 0);
+  const sourceAvailable = Number(selectedSource?.availableBalance ?? 0);
   const canSubmit = Boolean(form.source_financial_account_id && form.transfer_date && form.currency && numericAmount > 0
+    && sourceAvailable > 0 && numericAmount <= sourceAvailable
     && (form.destination_type === 'internal'
       ? form.destination_financial_account_id
       : form.external_institution_name.trim() && form.external_account_name.trim()
@@ -676,7 +994,8 @@ function TransfersPage({ onViewHistory }) {
   };
   const submitTransfer = async event => {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || transferSubmitLock.current) return;
+    transferSubmitLock.current = true;
     setSubmitting(true);
     setError('');
     setFieldErrors({});
@@ -703,13 +1022,26 @@ function TransfersPage({ onViewHistory }) {
         payload.external_account_number = form.external_account_number.trim() || null;
       }
       const result = await accountingApi.createTransfer(payload);
-      setCreatedTransfer(result);
+      const transfer = result?.data || result;
+      const completedTransfer = {
+        ...transfer,
+        _source_name: selectedSource?.name || 'Source account',
+        _destination_name: form.destination_type === 'internal' ? selectedDestination?.name || 'Destination account' : form.external_account_name || 'External recipient',
+        _method: form.transfer_method,
+      };
+      let balancesRefreshed = true;
+      try {
+        await refreshTransferData();
+      } catch {
+        balancesRefreshed = false;
+      }
       setForm(current => ({ ...emptyTransferForm(), transfer_method: current.transfer_method, destination_type: current.destination_type }));
-      await refreshTransferData();
+      setCreatedTransfer({ ...completedTransfer, _balances_refreshed: balancesRefreshed });
     } catch (requestError) {
       setError(requestError.message || 'Transfer could not be created.');
       setFieldErrors(requestError.details || {});
     } finally {
+      transferSubmitLock.current = false;
       setSubmitting(false);
     }
   };
@@ -719,7 +1051,6 @@ function TransfersPage({ onViewHistory }) {
   return <main className="content inner-page transfer-page">
     <div className="title-row"><div><p className="eyebrow">MONEY</p><h1>Transfer money</h1><p>Move funds between your accounts or record money sent to an external person or account.</p></div><AppLink href={pagePath('transfer-history')} className="secondary-button"><ReceiptText size={16}/>View transfer history</AppLink></div>
     {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Transfer needs attention</strong>{error}</span><button onClick={() => setError('')}>Dismiss</button></div>}
-    {createdTransfer && <div className="account-save-message success"><Check size={18}/><span><strong>{createdTransfer.status === 'posted' ? 'Transfer posted' : 'Draft saved'}</strong>{createdTransfer.number || 'The transfer'} · {money(createdTransfer.amount, createdTransfer.currency || 'PHP')}</span><button onClick={() => setCreatedTransfer(null)}>Dismiss</button></div>}
 
     <section className="transfer-layout">
       <form className="panel transfer-form" onSubmit={submitTransfer}>
@@ -727,8 +1058,8 @@ function TransfersPage({ onViewHistory }) {
         <div className="transfer-method-grid">{transferMethods.map(({ value, label, description, Icon }) => <button type="button" key={value} className={form.transfer_method === value ? 'selected' : ''} onClick={() => chooseMethod(value)}><Icon size={19}/><span><strong>{label}</strong><small>{description}</small></span><Check size={15}/></button>)}</div>
 
         <div className="transfer-fields">
-          <label className="span-2">Send from<select value={form.source_financial_account_id} onChange={event => chooseSource(event.target.value)} required><option value="">Select a compatible source account</option>{sourceAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {money(account.availableBalance, account.currency || 'PHP')} available</option>)}</select>{sourceAccounts.length === 0 && <small className="account-field-help">No active account is enabled for this transfer method.</small>}{issue('source_financial_account_id')}</label>
-          <label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => updateForm('amount', event.target.value)} placeholder="0.00" required/>{issue('amount')}</label>
+          <label className="span-2">Send from<select className="transfer-source-select" value={form.source_financial_account_id} onChange={event => chooseSource(event.target.value)} required><option value="">Select a compatible source account</option>{availableSourceAccounts.length > 0 && <optgroup label={`Available accounts (${availableSourceAccounts.length})`}>{availableSourceAccounts.map(account => <option value={account.id} key={account.id}>{financialAccountOptionLabel(account, { includeBalance: true })}</option>)}</optgroup>}{unavailableSourceAccounts.length > 0 && <optgroup label={`Unavailable — no balance (${unavailableSourceAccounts.length})`}>{unavailableSourceAccounts.map(account => <option value={account.id} key={account.id} disabled>UNAVAILABLE · {financialAccountOptionLabel(account, { includeBalance: true })}</option>)}</optgroup>}</select>{sourceAccounts.length === 0 && <small className="account-field-help">No active account is enabled for this transfer method.</small>}{sourceAccounts.length > 0 && availableSourceAccounts.length === 0 && <small className="transfer-source-availability-note">All compatible accounts are unavailable because they have no transferable balance.</small>}{availableSourceAccounts.length > 0 && unavailableSourceAccounts.length > 0 && <small className="transfer-source-availability-note">Unavailable accounts are disabled because their available balance is zero.</small>}{issue('source_financial_account_id')}</label>
+          <label>Amount<input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => updateForm('amount', event.target.value)} placeholder="0.00" required/>{selectedSource && numericAmount > sourceAvailable && <small className="account-field-error">Amount exceeds the available balance of {money(sourceAvailable, selectedSource.currency)}.</small>}{issue('amount')}</label>
           <label>Currency<input value={form.currency} readOnly/>{issue('currency')}</label>
           <label>Transfer date<input type="date" value={form.transfer_date} onChange={event => updateForm('transfer_date', event.target.value)} required/>{issue('transfer_date')}</label>
           {form.transfer_method === 'cheque' && <label>Cheque number<input value={form.cheque_number} onChange={event => updateForm('cheque_number', event.target.value)} placeholder="Enter cheque number" required/>{issue('cheque_number')}</label>}
@@ -736,7 +1067,7 @@ function TransfersPage({ onViewHistory }) {
 
         <div className="transfer-subsection"><div><h3>Destination</h3><p>Internal transfers stay between accounts in this portal. External transfers record money leaving the business account.</p></div><div className="destination-tabs"><button type="button" className={form.destination_type === 'internal' ? 'selected' : ''} onClick={() => updateForm('destination_type', 'internal')}><Building2 size={16}/>Internal account</button><button type="button" className={form.destination_type === 'external' ? 'selected' : ''} onClick={() => updateForm('destination_type', 'external')}><Globe2 size={16}/>External recipient</button></div></div>
 
-        {form.destination_type === 'internal' ? <div className="transfer-fields"><label className="span-2">Receive in<select value={form.destination_financial_account_id} onChange={event => updateForm('destination_financial_account_id', event.target.value)} disabled={!selectedSource} required><option value="">{selectedSource ? 'Select destination account' : 'Select a source account first'}</option>{destinationAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {money(account.currentBalance, account.currency || 'PHP')}</option>)}</select>{issue('destination_financial_account_id')}</label></div> : <div className="transfer-fields">
+        {form.destination_type === 'internal' ? <div className="transfer-fields"><label className="span-2">Receive in<select value={form.destination_financial_account_id} onChange={event => updateForm('destination_financial_account_id', event.target.value)} disabled={!selectedSource} required><option value="">{selectedSource ? 'Select destination account' : 'Select a source account first'}</option>{destinationAccountGroups.map(group => group.accounts.length > 0 && <optgroup key={group.key} label={group.label}>{group.accounts.map(account => <option value={account.id} key={account.id}>{financialAccountOptionLabel(account, { includeBalance: true })}</option>)}</optgroup>)}{otherDestinationAccounts.length > 0 && <optgroup label="Other">{otherDestinationAccounts.map(account => <option value={account.id} key={account.id}>{financialAccountOptionLabel(account, { includeBalance: true })}</option>)}</optgroup>}</select>{issue('destination_financial_account_id')}</label></div> : <div className="transfer-fields">
           <label>Bank or e-wallet<select value={form.external_institution_name} onChange={event => updateForm('external_institution_name', event.target.value)} disabled={externalOptionsLoading} required><option value="">{externalOptionsLoading ? 'Loading banks and e-wallets…' : 'Select bank or e-wallet'}</option><optgroup label="Banks">{bankInstitutions.map(institution => { const name = institution.name || institution.institution_name || institution.display_name; return name ? <option key={institution.id || name} value={name}>{name}</option> : null; })}</optgroup><optgroup label="E-wallets">{walletInstitutions.map(institution => { const name = institution.name || institution.institution_name || institution.display_name; return name ? <option key={institution.id || name} value={name}>{name}</option> : null; })}</optgroup></select>{issue('external_institution_name')}</label>
           <label>Account name<input value={form.external_account_name} onChange={event => updateForm('external_account_name', event.target.value)} placeholder="Name on destination account" required/>{issue('external_account_name')}{issue('recipient_name')}</label>
           <label className="span-2">Account number<input value={form.external_account_number} onChange={event => updateForm('external_account_number', event.target.value)} placeholder="Enter bank or wallet account number" required/>{issue('external_account_number')}</label>
@@ -848,6 +1179,8 @@ function CustomerRefundsPage({ onViewList }) {
         <p className="transfer-disbursement-note"><ShieldCheck size={15}/>Accounting verifies the customer order, calculates the remaining refundable difference, and returns it through the original payment account.</p>
       </aside>
     </section>
+
+    {submitting && <div className="modal-backdrop transfer-processing-backdrop" role="alert" aria-live="assertive"><div className="modal transfer-processing-modal"><div className="transfer-processing-spinner"><RefreshCw className="spin" size={30}/></div><p className="eyebrow">REFUND IN PROGRESS</p><h2>Posting customer refund…</h2><strong>{selectedOrder ? money(selectedOrder.refund_amount, 'PHP') : `Order #${transactionId}`}</strong><p>Please wait while the refund, journal entry, and account balance are updated.</p><div className="transfer-processing-warning"><ShieldCheck size={16}/><span>Do not submit again or close this page.</span></div></div></div>}
   </main>;
 }
 
@@ -945,7 +1278,7 @@ function CustomerRefundListPage({ onNewRefund }) {
         <label>Date from<input name="date_from" type="date" value={draftFilters.date_from} max={draftFilters.date_to || undefined} onChange={updateFilter}/></label>
         <label>Date to<input name="date_to" type="date" value={draftFilters.date_to} min={draftFilters.date_from || undefined} onChange={updateFilter}/></label>
         <label>Status<select name="status" value={draftFilters.status} onChange={updateFilter}><option value="">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="voided">Void</option></select></label>
-        <label>Financial account<select name="financial_account_id" value={draftFilters.financial_account_id} onChange={updateFilter}><option value="">All financial accounts</option>{[...accounts].sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' })).map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+        <label>Financial account<select name="financial_account_id" value={draftFilters.financial_account_id} onChange={updateFilter}><option value="">All financial accounts</option>{[...accounts].sort((left, right) => left.name.localeCompare(right.name, 'en', { sensitivity: 'base' })).map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account)}</option>)}</select></label>
         <div className="filter-actions"><button type="button" className="text-button" onClick={clearFilters}>Clear all</button><button type="submit" className="primary-button"><SlidersHorizontal size={15}/>Apply filters</button></div>
       </form>
       {loading && <div className="transaction-state"><RefreshCw className="spin" size={20}/><strong>Loading customer refunds…</strong></div>}
@@ -977,6 +1310,12 @@ function TransferHistoryPage({ onNewTransfer }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState('');
+  const [voidResult, setVoidResult] = useState(null);
 
   useEffect(() => {
     let current = true;
@@ -1003,7 +1342,7 @@ function TransferHistoryPage({ onNewTransfer }) {
       .catch(requestError => current && setError(requestError.message || 'Transfer history could not be loaded.'))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
-  }, [filters.date_from, filters.date_to, filters.status, filters.financial_account_id, page]);
+  }, [filters.date_from, filters.date_to, filters.status, filters.financial_account_id, page, refreshVersion]);
 
   const updateFilter = event => setDraftFilters(current => ({ ...current, [event.target.name]: event.target.value }));
   const applyFilters = event => {
@@ -1015,6 +1354,36 @@ function TransferHistoryPage({ onNewTransfer }) {
     setDraftFilters(emptyTransferHistoryFilters);
     setFilters(emptyTransferHistoryFilters);
     setPage(1);
+  };
+  const openVoidTransfer = transfer => {
+    setVoidTarget(transfer);
+    setVoidReason('');
+    setVoidError('');
+  };
+  const closeVoidTransfer = () => {
+    if (voiding) return;
+    setVoidTarget(null);
+    setVoidReason('');
+    setVoidError('');
+  };
+  const submitVoidTransfer = async event => {
+    event.preventDefault();
+    const reason = voidReason.trim();
+    if (!voidTarget || !reason || voiding) return;
+    setVoiding(true);
+    setVoidError('');
+    try {
+      const result = await accountingApi.voidTransfer(voidTarget.id, reason);
+      setTransfers(current => current.map(transfer => String(transfer.id) === String(result.id) ? result : transfer));
+      setVoidResult(result);
+      setVoidTarget(null);
+      setVoidReason('');
+      setRefreshVersion(value => value + 1);
+    } catch (requestError) {
+      setVoidError(requestError.message || 'The transfer could not be voided.');
+    } finally {
+      setVoiding(false);
+    }
   };
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const accountMethodGroups = [
@@ -1040,19 +1409,22 @@ function TransferHistoryPage({ onNewTransfer }) {
       <form className="transaction-filters transfer-history-filters" onSubmit={applyFilters}>
         <label>Date from<input name="date_from" type="date" value={draftFilters.date_from} max={draftFilters.date_to || undefined} onChange={updateFilter}/></label>
         <label>Date to<input name="date_to" type="date" value={draftFilters.date_to} min={draftFilters.date_from || undefined} onChange={updateFilter}/></label>
-        <label>Status<select name="status" value={draftFilters.status} onChange={updateFilter}><option value="">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="voided">Void</option></select></label>
-        <label>Payment method / account<select name="financial_account_id" value={draftFilters.financial_account_id} onChange={updateFilter}><option value="">All payment methods and accounts</option>{accountMethodGroups.map(group => group.accounts.length > 0 && <optgroup key={group.label} label={group.label}>{group.accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</optgroup>)}{otherAccounts.length > 0 && <optgroup label="Other">{otherAccounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</optgroup>}</select></label>
+        <label>Status<select name="status" value={draftFilters.status} onChange={updateFilter}><option value="">All statuses</option><option value="draft">Draft</option><option value="posted">Posted</option><option value="voided">Voided</option></select></label>
+        <label>Payment method / account<select name="financial_account_id" value={draftFilters.financial_account_id} onChange={updateFilter}><option value="">All payment methods and accounts</option>{accountMethodGroups.map(group => group.accounts.length > 0 && <optgroup key={group.label} label={group.label}>{group.accounts.map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account)}</option>)}</optgroup>)}{otherAccounts.length > 0 && <optgroup label="Other">{otherAccounts.map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account)}</option>)}</optgroup>}</select></label>
         <div className="filter-actions"><button type="button" className="text-button" onClick={clearFilters}>Clear all</button><button type="submit" className="primary-button"><SlidersHorizontal size={15}/>Apply filters</button></div>
       </form>
       {loading && <div className="transaction-state"><RefreshCw className="spin" size={20}/><strong>Loading transfer history…</strong></div>}
       {!loading && error && <div className="transaction-state error-state"><CircleHelp size={20}/><strong>Unable to load transfer history</strong><span>{error}</span></div>}
       {!loading && !error && transfers.length === 0 && <div className="transaction-state"><ArrowLeftRight size={21}/><strong>No transfers found</strong><span>Try a different filter or create a new transfer.</span></div>}
-      {!loading && !error && transfers.length > 0 && <div className="transfer-history-table"><div className="transfer-history-row transfer-history-head"><span>Transfer</span><span>Method</span><span>From</span><span>To</span><span>Date</span><span>Status</span><span>Amount</span><span>Details</span></div>{transfers.map(transfer => {
+      {!loading && !error && transfers.length > 0 && <div className="transfer-history-table"><div className="transfer-history-row transfer-history-head"><span>Transfer</span><span>Method</span><span>From</span><span>To</span><span>Date</span><span>Status</span><span>Amount</span><span>Details</span><span>Actions</span></div>{transfers.map(transfer => {
         const external = transfer.destination_type === 'external';
-        return <div className="transfer-history-row" key={transfer.id}><span><strong>{transfer.reference || transfer.number}</strong><small>{external ? 'External' : 'Internal'} · {transfer.number}</small></span><span>{humanize(transfer.transfer_method || 'online')}</span><span>{transfer.source_account?.name || '—'}</span><span><strong>{external ? transfer.recipient_name : transfer.destination_account?.name || '—'}</strong>{external && <small>{transfer.external_institution_name || transfer.masked_external_account_number || 'External recipient'}</small>}</span><span>{calendarDate(transfer.transfer_date)}</span><span><em className={`history-status ${transfer.status}`}>{transfer.status === 'voided' ? 'Void' : humanize(transfer.status)}</em></span><span><strong>{money(transfer.amount, transfer.currency || 'PHP')}</strong></span><span><small>{transfer.memo || '—'}</small></span></div>;
+        const status = String(transfer.status || 'draft').toLowerCase();
+        return <div className={`transfer-history-row ${status === 'voided' ? 'voided-transfer-row' : ''}`} key={transfer.id}><span><strong>{transfer.reference || transfer.number}</strong><small>{external ? 'External' : 'Internal'} · {transfer.number}</small></span><span>{humanize(transfer.transfer_method || 'online')}</span><span>{transfer.source_account?.name || '—'}</span><span><strong>{external ? transfer.recipient_name : transfer.destination_account?.name || '—'}</strong>{external && <small>{transfer.external_institution_name || transfer.masked_external_account_number || 'External recipient'}</small>}</span><span>{calendarDate(transfer.transfer_date)}</span><span><em className={`history-status ${status}`}>{status === 'voided' ? 'Voided' : humanize(status)}</em></span><span><strong>{money(transfer.amount, transfer.currency || 'PHP')}</strong></span><span><small>{status === 'voided' ? `Reason: ${transfer.void_reason || 'Not provided'}` : transfer.memo || '—'}</small>{status === 'voided' && transfer.voided_at && <small>Reversed {calendarDate(transfer.voided_at)}</small>}</span><span className="transfer-history-actions">{status === 'posted' ? <button type="button" className="void-link" onClick={() => openVoidTransfer(transfer)}><RotateCcw size={13}/>Void</button> : <small>—</small>}</span></div>;
       })}</div>}
       {!loading && !error && lastPage > 1 && <div className="transfer-pagination"><button type="button" className="secondary-button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1}><ArrowLeft size={15}/>Previous</button><span>Page {page} of {lastPage}</span><button type="button" className="secondary-button" onClick={() => setPage(current => Math.min(lastPage, current + 1))} disabled={page === lastPage}>Next<ChevronRight size={15}/></button></div>}
     </section>
+    {voidTarget && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && closeVoidTransfer()}><form className="modal confirmation-modal transfer-void-modal" onSubmit={submitVoidTransfer}><div className="modal-head"><div><p className="eyebrow">VOID MONEY TRANSFER</p><h2>Reverse this transfer?</h2></div><button type="button" className="icon-button" onClick={closeVoidTransfer} disabled={voiding}><X size={19}/></button></div><p className="modal-intro">This keeps the original transfer for audit and posts a reversing journal entry to restore the affected balances.</p><div className="payment-confirm-summary"><div><span>Transfer</span><strong>{voidTarget.reference || voidTarget.number}</strong></div><div><span>Amount</span><strong>{money(voidTarget.amount, voidTarget.currency || 'PHP')}</strong></div><div><span>From</span><strong>{voidTarget.source_account?.name || '—'}</strong></div><div><span>To</span><strong>{voidTarget.destination_type === 'external' ? voidTarget.recipient_name : voidTarget.destination_account?.name || '—'}</strong></div></div><label className="void-reason-field">Reason<textarea rows="3" maxLength="255" value={voidReason} onChange={event => setVoidReason(event.target.value)} placeholder="Example: Wrong destination account or duplicate transfer" required/></label>{voidError && <div className="portal-login-error" role="alert"><CircleHelp size={16}/><span>{voidError}</span></div>}<div className="modal-actions"><button type="button" className="text-button" onClick={closeVoidTransfer} disabled={voiding}>Cancel</button><button type="submit" className="primary-button danger-button" disabled={voiding || !voidReason.trim()}>{voiding ? <><RefreshCw className="spin" size={15}/>Voiding…</> : <><RotateCcw size={15}/>Void transfer</>}</button></div></form></div>}
+    {voidResult && <div className="modal-backdrop transfer-success-backdrop" role="dialog" aria-modal="true" aria-label="Transfer voided"><div className="modal transfer-success-modal transfer-void-success"><div className="success-icon"><Check size={28}/></div><p className="eyebrow">TRANSFER VOIDED</p><h2>{money(voidResult.amount, voidResult.currency || 'PHP')}</h2><span className="transfer-success-number">{voidResult.number}</span><p>The reversal was posted successfully. The original record remains in history and the affected account balances were restored.</p><button type="button" className="primary-button wide" onClick={() => setVoidResult(null)}>Done</button></div></div>}
   </main>;
 }
 
@@ -1735,6 +2107,8 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved, initialKind = ''
   const maskedNumber = account.masked_account_number || account.account_number_masked || 'No number saved';
   const isCreditCard = form.kind === 'credit_card';
   const isCash = form.kind === 'cash';
+  const selectedInstitution = institutions.find(item => String(item.id) === String(form.financial_institution_id));
+  const accountDisplayPreview = [selectedInstitution?.name, form.name.trim()].filter(Boolean).join(' · ');
   const canSubmit = form.name.trim() && form.currency.trim().length === 3
     && form.kind
     && (isCash || (form.financial_institution_id && (!isCreate || form.account_number.trim())))
@@ -1750,7 +2124,7 @@ function FinancialAccountEditPage({ accountId, onBack, onSaved, initialKind = ''
         <section className="panel account-edit-section">
           <div className="account-edit-heading"><span><Landmark size={19}/></span><div><h2>Account identity</h2><p>The name and banking details employees see when selecting this account.</p></div></div>
           <div className="account-form-grid">
-            <label className="span-2">Account name<input name="name" value={form.name} onChange={update} maxLength="255" placeholder="e.g. BDO Payroll Account" required/>{issue('name')}</label>
+            <label className="span-2">Account name<input name="name" value={form.name} onChange={update} maxLength="255" placeholder="e.g. Checking Account or Platinum Master" required/><small className="account-field-help">Enter only the account product or purpose. Do not repeat the financial institution.{accountDisplayPreview && <> It will appear as <strong>{accountDisplayPreview}</strong>.</>}</small>{issue('name')}</label>
             <label>Account type<select name="kind" value={form.kind} onChange={update} disabled={isCreate && Boolean(initialKind)} required><option value="">Select account type</option>{financialAccountKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{issue('kind')}</label>
             <label>Currency<input name="currency" value={form.currency} maxLength="3" placeholder="PHP" disabled required/>{issue('currency')}</label>
             <label>Financial institution<select name="financial_institution_id" value={form.financial_institution_id} onChange={update} disabled={isCash} required={!isCash}><option value="">{isCash ? 'Not required for cash' : 'Select institution'}</option>{institutions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{issue('financial_institution_id')}</label>
@@ -2047,6 +2421,52 @@ function creditCardHolderInitials(identity) {
   return holderName.trim().split(/\s+/).map(part => part[0]).join('').slice(0, 4).toUpperCase();
 }
 
+function SearchableCreditCardField({ cards, value, onChange, placeholder = 'Search and select a credit card', includeBalance = true, required = false, locked = false }) {
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const editing = useRef(false);
+  const [open, setOpen] = useState(false);
+  const options = cards.map(card => {
+    const identity = creditCardIdentity(card);
+    const balance = card.available_credit ?? card.available_balance;
+    return {
+      id: String(card.id),
+      label: `${identity.institutionName} · ${identity.accountName} · ${identity.accountHolderName} · ${identity.accountNumber}${includeBalance ? ` · ${money(balance, card.currency || 'PHP')} available` : ''}`,
+      identity,
+      balance: includeBalance ? money(balance, card.currency || 'PHP') : null,
+    };
+  });
+  const selected = options.find(option => option.id === String(value || ''));
+  const [text, setText] = useState(selected?.label || '');
+  const query = selected && text === selected.label ? '' : text.trim().toLowerCase();
+  const visibleOptions = options.filter(option => !query || option.label.toLowerCase().includes(query));
+
+  useEffect(() => {
+    if (editing.current) return;
+    setText(selected?.label || '');
+  }, [selected?.label, value]);
+
+  useEffect(() => {
+    const close = event => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const changeText = event => {
+    if (locked) return;
+    const next = event.target.value;
+    editing.current = true;
+    setText(next);
+    setOpen(true);
+    onChange('');
+  };
+  const choose = option => { editing.current = false; setText(option.label); setOpen(false); onChange(option.id); };
+
+  return <div className={`credit-card-combobox ${open ? 'open' : ''} ${locked ? 'locked' : ''}`} ref={rootRef}><Search size={15}/><input ref={inputRef} value={text} onChange={changeText} onFocus={event => { if (!locked) { setOpen(true); event.currentTarget.select(); } }} placeholder={placeholder} autoComplete="off" required={required} readOnly={locked} aria-readonly={locked} aria-expanded={!locked && open} aria-autocomplete="list"/><ChevronDown className="credit-card-combobox-chevron" size={15}/>{!locked && open && <div className="credit-card-combobox-menu" role="listbox">{visibleOptions.length ? visibleOptions.map(option => <button type="button" key={option.id} className={option.id === String(value || '') ? 'selected' : ''} onMouseDown={event => event.preventDefault()} onClick={() => choose(option)}><span><strong>{option.identity.institutionName} · {option.identity.accountName}</strong><small>{option.identity.accountHolderName} · {option.identity.accountNumber}</small></span>{option.balance && <em>{option.balance}<small>available</small></em>}</button>) : <div className="credit-card-combobox-empty">No matching credit cards</div>}</div>}</div>;
+}
+
 function emptyCreditCardTransactionForm() {
   return {
     credit_card_id: '', payment_date: localIsoDate(new Date()), due_date: '', amount: '', installment_count: '1',
@@ -2150,7 +2570,7 @@ function CreditCardTransactionPage() {
 
   return <main className="content inner-page credit-transaction-page">
     <AppLink href={pagePath('credit-cards')} className="back-button"><ArrowLeft size={16}/>Credit cards</AppLink>
-    <div className="title-row"><div><p className="eyebrow">CREDIT CARDS</p><h1>Add credit card transaction</h1><p>Record a card purchase, post its journal entry, and assign it to the correct statement cycle.</p></div><span className="edit-status-pill active">Posts immediately</span></div>
+    <div className="title-row"><div><p className="eyebrow">CREDIT CARDS</p><h1>Add credit card transaction</h1><p>Record a card purchase after the selected card has enough available balance.</p></div><span className="edit-status-pill active">Balance checked before posting</span></div>
     {error && <div className="account-save-message error"><CircleHelp size={18}/><span><strong>Transaction needs attention</strong>{error}</span><button type="button" onClick={() => setError('')}>Dismiss</button></div>}
     {createdTransaction && <div className="account-save-message success"><Check size={18}/><span><strong>Credit card transaction posted</strong>{createdTransaction.number || 'The transaction'} · {money(createdTransaction.amount, createdTransaction.currency || selectedCard?.currency || 'PHP')}</span><button type="button" onClick={() => setCreatedTransaction(null)}>Dismiss</button></div>}
 
@@ -2159,7 +2579,7 @@ function CreditCardTransactionPage() {
         <div className="transfer-section-head"><span><CreditCard size={20}/></span><div><h2>Transaction details</h2><p>Choose the card and enter the purchase details. Its accounting defaults are applied automatically.</p></div></div>
         {cards.length === 0 && <div className="credit-transaction-empty"><CircleHelp size={18}/><span><strong>No usable credit card is available.</strong>Add an active card that is enabled for payments before posting a transaction.</span></div>}
         <div className="transfer-fields">
-          <label className="span-2">Credit card<select value={form.credit_card_id} onChange={event => updateForm('credit_card_id', event.target.value)} required><option value="">Select a credit card</option>{cardGroups.map(group => <optgroup key={group.name} label={group.name}>{group.cards.map(card => { const identity = creditCardIdentity(card); const holderInitials = creditCardHolderInitials(identity); return <option key={card.id} value={card.id}>{identity.accountName}{holderInitials ? ` · ${holderInitials}` : ''} · {identity.accountNumber} · {money(card.available_credit ?? card.available_balance, card.currency || 'PHP')} available</option>; })}</optgroup>)}</select>{issue('credit_card_id') || issue('credit_card')}</label>
+          <label className="span-2 credit-card-search-select">Credit card<SearchableCreditCardField cards={cards} value={form.credit_card_id} onChange={value => updateForm('credit_card_id', value)} placeholder="Search bank, card, holder, or last digits" required/>{issue('credit_card_id') || issue('credit_card')}</label>
           <label>Transaction date<input type="date" value={form.payment_date} onChange={event => updateForm('payment_date', event.target.value)} required/>{issue('payment_date') || issue('transaction_date')}</label>
           <label>First due date <small>Optional</small><input type="date" min={form.payment_date} value={form.due_date} onChange={event => updateForm('due_date', event.target.value)}/><small className="account-field-help">Leave blank to calculate it from the card's billing cycle.</small>{!dueDateValid && <small className="account-field-error">Due date cannot be before the transaction date.</small>}{issue('due_date')}</label>
           <label>Amount<input type="number" min="0.01" max={availableCredit || undefined} step="0.01" value={form.amount} onChange={event => updateForm('amount', event.target.value)} placeholder="0.00" required/><small className="account-field-help">Available credit: {money(availableCredit, selectedCard?.currency || 'PHP')}</small>{issue('amount')}</label>
@@ -2185,6 +2605,205 @@ function CreditCardTransactionPage() {
   </main>;
 }
 
+function CreditCardPaidTransactionsPage() {
+  const emptyFilters = { credit_card_id: '', account_holder_id: '', financial_institution_id: '', status: '', date_from: '', date_to: '', search: '' };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [payload, setPayload] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [version, setVersion] = useState(0);
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState('');
+  const [voidResult, setVoidResult] = useState(null);
+
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ page: String(page), per_page: '20' });
+      Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
+      setLoading(true);
+      setError('');
+      accountingApi.paidCreditCardTransactions(`?${params.toString()}`)
+        .then(response => current && setPayload(response))
+        .catch(requestError => current && setError(requestError.message || 'Paid credit-card transactions could not be loaded.'))
+        .finally(() => current && setLoading(false));
+    }, filters.search ? 250 : 0);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [filters, page, version]);
+
+  const update = event => {
+    const { name, value } = event.target;
+    setFilters(current => ({ ...current, [name]: value }));
+    setPage(1);
+  };
+  const reset = () => { setFilters(emptyFilters); setPage(1); };
+  const records = payload?.data || [];
+  const options = payload?.filters || {};
+  const summary = payload?.summary || {};
+  const currentPage = Number(payload?.current_page || page);
+  const lastPage = Number(payload?.last_page || 1);
+  const totalsByCurrency = summary.totals_by_currency || [];
+  const totalLabel = totalsByCurrency.length <= 1 ? money(totalsByCurrency[0]?.total_paid || 0, totalsByCurrency[0]?.currency || 'PHP') : `${summary.posted_count || 0} mixed-currency payments`;
+  const hasFilters = Object.values(filters).some(Boolean);
+  const openVoid = payment => { setVoidTarget(payment); setVoidReason(''); setVoidError(''); };
+  const closeVoid = () => { if (!voiding) { setVoidTarget(null); setVoidReason(''); setVoidError(''); } };
+  const submitVoid = async event => {
+    event.preventDefault();
+    const reason = voidReason.trim();
+    if (!voidTarget || !reason || voiding) return;
+    setVoiding(true);
+    setVoidError('');
+    try {
+      const result = await accountingApi.voidCreditCardPayment(voidTarget.id, reason);
+      setVoidResult(result);
+      setVoidTarget(null);
+      setVoidReason('');
+      setVersion(value => value + 1);
+    } catch (requestError) {
+      setVoidError(requestError.message || 'This credit-card payment could not be voided.');
+    } finally {
+      setVoiding(false);
+    }
+  };
+  const settlementDetails = payment => {
+    const allocations = payment.allocations || [];
+    const expenses = allocations.flatMap(allocation => allocation.obligation?.linked_expenses || []);
+    return {
+      applied: allocations.reduce((total, allocation) => total + Number(allocation.amount || 0), 0),
+      expenses,
+      expenseTotal: expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0),
+    };
+  };
+
+  return <main className="content inner-page credit-paid-page"><div className="title-row"><div><p className="eyebrow">CREDIT CARDS</p><h1>Paid credit card transactions</h1><p>Review posted and voided card balance deposits, including their funding accounts.</p></div><button className="secondary-button" onClick={() => setVersion(value => value + 1)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div>
+    <section className="credit-paid-summary"><article><span>Total paid</span><strong>{totalLabel}</strong><small>Voided payments are excluded</small></article><article><span>Transactions</span><strong>{summary.transaction_count || 0}</strong><small>{summary.posted_count || 0} posted · {summary.voided_count || 0} voided</small></article></section>
+    <section className="panel credit-paid-panel"><div className="credit-paid-filters"><label className="credit-paid-card-filter">Credit card<SearchableCreditCardField cards={options.credit_cards || []} value={filters.credit_card_id} onChange={value => { setFilters(current => ({ ...current, credit_card_id: value })); setPage(1); }} placeholder="All cards — type to search" includeBalance={false}/></label><label>Card holder<select name="account_holder_id" value={filters.account_holder_id} onChange={update}><option value="">All card holders</option>{(options.account_holders || []).map(holder => <option key={holder.id} value={holder.id}>{holder.name}</option>)}</select></label><label>Bank / institution<select name="financial_institution_id" value={filters.financial_institution_id} onChange={update}><option value="">All banks</option>{(options.institutions || []).map(institution => <option key={institution.id} value={institution.id}>{institution.name}</option>)}</select></label><label>Status<select name="status" value={filters.status} onChange={update}><option value="">All statuses</option><option value="posted">Posted</option><option value="voided">Voided</option></select></label><label>Paid from<input name="date_from" type="date" value={filters.date_from} onChange={update}/></label><label>Paid to<input name="date_to" type="date" min={filters.date_from || undefined} value={filters.date_to} onChange={update}/></label><label className="credit-paid-search">Search<div><Search size={15}/><input name="search" value={filters.search} onChange={update} placeholder="Reference, card, holder, or bank"/></div></label>{hasFilters && <button className="secondary-button credit-filter-reset" onClick={reset}>Clear filters</button>}</div>
+      {loading && !payload && <div className="transaction-state"><RefreshCw className="spin" size={21}/><strong>Loading paid transactions…</strong></div>}
+      {!loading && error && <div className="transaction-state error-state"><CircleHelp size={22}/><strong>Unable to load paid transactions</strong><span>{error}</span></div>}
+      {!error && payload && records.length === 0 && <div className="transaction-state"><CheckCircle2 size={22}/><strong>No credit-card payment records found</strong><span>Try another credit card, holder, status, bank, or date range.</span></div>}
+      {!error && records.length > 0 && <div className="credit-paid-table"><div className="credit-paid-row head"><span>Payment / reference</span><span>Credit card</span><span>Card holder</span><span>Bank</span><span>Paid from</span><span>Date / status</span><span>Settlement / expense</span><span>Amount</span><span>Action</span></div>{records.map(payment => { const card = payment.offset_account?.financial_account || {}; const source = payment.lines?.[0] || {}; const details = settlementDetails(payment); const isVoided = payment.status === 'voided'; const expenseNames = [...new Set(details.expenses.map(expense => expense.expense_item?.name || 'Card expense'))].join(', '); const expenseNotes = [...new Set(details.expenses.map(expense => expense.description).filter(Boolean))].join(' · '); return <div className={`credit-paid-row ${isVoided ? 'voided-card-payment' : ''}`} key={payment.id}><span><strong>{payment.number}</strong><small>{source.reference || payment.memo || 'Card balance deposit'}</small>{isVoided && payment.void_reason && <small title={payment.void_reason}>Reason: {payment.void_reason}</small>}</span><span><strong>{card.name || 'Credit card'}</strong><small>{card.masked_account_number || 'No account number'}</small></span><span><strong>{card.user_account?.name || 'No holder'}</strong><small>{card.user_account?.code || 'Unassigned'}</small></span><span><strong>{card.institution?.name || 'No institution'}</strong><small>{card.institution?.code || '—'}</small></span><span><strong>{source.financial_account?.name || 'Funding account'}</strong><small>{source.payment_method?.name || source.financial_account?.institution?.name || '—'}</small></span><span><strong>{calendarDate(payment.payment_date)}</strong><small className={`credit-paid-status ${isVoided ? 'voided' : 'posted'}`}>{isVoided ? 'Voided' : 'Posted'}</small></span><span className={details.expenses.length ? 'credit-paid-expense has-expense' : 'credit-paid-expense'}><strong>{details.applied > 0 ? `${money(details.applied, payment.currency)} ${isVoided ? 'reversed' : 'applied'}` : 'Not yet applied'}</strong>{details.expenses.length > 0 ? <><small>{money(details.expenseTotal, payment.currency)} expense · {expenseNames}</small>{expenseNotes && <small title={expenseNotes}>{expenseNotes}</small>}</> : <small>No linked expense</small>}</span><span className="amount"><strong>{money(payment.amount, payment.currency)}</strong><small>{isVoided ? 'Reversed' : 'Paid'}</small></span><span className="credit-paid-actions">{isVoided ? <small>Already voided</small> : <button type="button" onClick={() => openVoid(payment)}><RotateCcw size={13}/>Void</button>}</span></div>; })}</div>}
+      {!error && lastPage > 1 && <div className="credit-paid-pagination"><button className="secondary-button" disabled={currentPage <= 1 || loading} onClick={() => setPage(value => Math.max(1, value - 1))}>Previous</button><span>Page {currentPage} of {lastPage}</span><button className="secondary-button" disabled={currentPage >= lastPage || loading} onClick={() => setPage(value => Math.min(lastPage, value + 1))}>Next</button></div>}
+    </section>
+    {voidTarget && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && closeVoid()}><form className="modal confirmation-modal credit-payment-void-modal" onSubmit={submitVoid}><div className="modal-head"><div><p className="eyebrow">VOID CREDIT CARD PAYMENT</p><h2>Reverse this card payment?</h2></div><button type="button" className="icon-button" onClick={closeVoid} disabled={voiding}><X size={19}/></button></div><p className="modal-intro">The original payment stays in history. A reversing entry restores the funding and card balances, and any settled statement amount becomes due again.</p><div className="payment-confirm-summary"><div><span>Payment</span><strong>{voidTarget.number}</strong></div><div><span>Amount</span><strong>{money(voidTarget.amount, voidTarget.currency || 'PHP')}</strong></div><div><span>Credit card</span><strong>{voidTarget.offset_account?.financial_account?.name || 'Credit card'}</strong></div><div><span>Paid from</span><strong>{voidTarget.lines?.[0]?.financial_account?.name || 'Funding account'}</strong></div></div><label className="void-reason-field">Reason<textarea rows="3" maxLength="255" value={voidReason} onChange={event => setVoidReason(event.target.value)} placeholder="Example: Duplicate deposit or wrong credit card" required/></label>{voidError && <div className="portal-login-error" role="alert"><CircleHelp size={16}/><span>{voidError}</span></div>}<div className="modal-actions"><button type="button" className="text-button" onClick={closeVoid} disabled={voiding}>Cancel</button><button type="submit" className="primary-button danger-button" disabled={voiding || !voidReason.trim()}>{voiding ? <><RefreshCw className="spin" size={15}/>Voiding…</> : <><RotateCcw size={15}/>Void payment</>}</button></div></form></div>}
+    {voidResult && <div className="modal-backdrop transfer-success-backdrop" role="dialog" aria-modal="true" aria-label="Credit-card payment voided"><div className="modal transfer-success-modal transfer-void-success"><div className="success-icon"><Check size={28}/></div><p className="eyebrow">PAYMENT VOIDED</p><h2>{money(voidResult.amount, voidResult.currency || 'PHP')}</h2><span className="transfer-success-number">{voidResult.number}</span><p>The reversing entry was posted and the affected balances were restored. The original payment remains visible for audit.</p><button type="button" className="primary-button wide" onClick={() => setVoidResult(null)}>Done</button></div></div>}
+  </main>;
+}
+
+function CreditCardDepositDialog({ cards, initialCardId = '', initialAmount = '', onClose, onDeposited }) {
+  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
+  const [availableCards, setAvailableCards] = useState(cards);
+  const [form, setForm] = useState({ credit_card_id: initialCardId ? String(initialCardId) : '', payment_method_id: '', funding_account_id: '', payment_date: today, amount: initialAmount ? String(initialAmount) : '', reference: '' });
+  const [methods, setMethods] = useState([]);
+  const [fundingAccounts, setFundingAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [fundingLoading, setFundingLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const activeCards = availableCards.filter(card => card.is_active !== false);
+  const selectedCard = activeCards.find(card => String(card.id) === String(form.credit_card_id));
+  const selectedMethod = methods.find(method => String(method.id) === String(form.payment_method_id));
+  const selectedFunding = fundingAccounts.find(account => String(account.id) === String(form.funding_account_id));
+  const amount = Number(form.amount || 0);
+  const sourceAvailable = Number(selectedFunding?.availableBalance ?? selectedFunding?.available_balance ?? 0);
+  const ready = Boolean(selectedCard && selectedMethod && selectedFunding && amount > 0 && amount <= sourceAvailable && form.payment_date);
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    accountingApi.creditCards('?active=1').then(cardResponse => {
+      if (!current) return;
+      const cardRecords = (Array.isArray(cardResponse) ? cardResponse : cardResponse?.data || []).filter(card => card.is_active !== false);
+      setAvailableCards(cardRecords);
+      setForm(value => ({
+        ...value,
+        credit_card_id: value.credit_card_id || (cardRecords[0] ? String(cardRecords[0].id) : ''),
+      }));
+    }).catch(requestError => current && setError(requestError.message || 'Deposit options could not be loaded.'))
+      .finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!form.credit_card_id) { setMethods([]); return; }
+    let current = true;
+    setError('');
+    accountingApi.creditCardPaymentMethods(form.credit_card_id)
+      .then(response => current && setMethods(Array.isArray(response) ? response : response?.data || []))
+      .catch(requestError => current && setError(requestError.message || 'Deposit methods could not be loaded.'));
+    return () => { current = false; };
+  }, [form.credit_card_id]);
+
+  useEffect(() => {
+    if (!form.credit_card_id || !form.payment_method_id) {
+      setFundingAccounts([]);
+      setForm(value => ({ ...value, funding_account_id: '' }));
+      return;
+    }
+    let current = true;
+    setFundingLoading(true);
+    setFundingAccounts([]);
+    setForm(value => ({ ...value, funding_account_id: '' }));
+    accountingApi.creditCardFundingAccounts(form.credit_card_id, form.payment_method_id)
+      .then(response => current && setFundingAccounts((Array.isArray(response) ? response : response?.data || []).map(normalizeAccount)))
+      .catch(requestError => current && setError(requestError.message || 'Funding accounts could not be loaded.'))
+      .finally(() => current && setFundingLoading(false));
+    return () => { current = false; };
+  }, [form.credit_card_id, form.payment_method_id]);
+
+  const update = event => {
+    const { name, value } = event.target;
+    setForm(current => ({
+      ...current,
+      [name]: value,
+      ...(name === 'credit_card_id' ? { payment_method_id: '', funding_account_id: '' } : {}),
+      ...(name === 'payment_method_id' ? { funding_account_id: '' } : {}),
+    }));
+    setError('');
+  };
+  const submit = async event => {
+    event.preventDefault();
+    if (!ready) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = await accountingApi.createCreditCardDeposit({
+        credit_card_id: Number(form.credit_card_id),
+        payment_method_id: Number(form.payment_method_id),
+        funding_account_id: Number(form.funding_account_id),
+        payment_date: form.payment_date,
+        amount,
+        reference: form.reference.trim() || null,
+        memo: `Credit card balance deposit for ${selectedCard.name}`,
+        idempotency_key: crypto.randomUUID(),
+      });
+      onDeposited(result?.data || result, selectedCard);
+    } catch (requestError) {
+      const validationMessage = requestError.details && Object.values(requestError.details).flat()[0];
+      setError(validationMessage || requestError.message || 'The card balance deposit could not be posted.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return <div className="modal-backdrop card-deposit-backdrop" onMouseDown={event => event.target === event.currentTarget && !submitting && onClose()}><form className="modal card-deposit-dialog" onSubmit={submit}><div className="modal-head"><div><p className="eyebrow">CREDIT CARD BALANCE</p><h2>Deposit card balance</h2><p>Add any amount as account-level credit. It is not assigned to one statement.</p></div><button type="button" className="icon-button" onClick={onClose} disabled={submitting}><X size={19}/></button></div>
+    {error && <div className="payment-form-error card-deposit-error" role="alert"><CircleHelp size={16}/><span>{error}</span></div>}
+    {loading ? <div className="transaction-state"><RefreshCw className="spin" size={20}/><strong>Loading deposit options…</strong></div> : <div className="card-deposit-fields">
+      <label className="span-2 credit-card-search-select">Deposit to credit card <b>*</b><SearchableCreditCardField cards={activeCards} value={form.credit_card_id} onChange={value => { setForm(current => ({ ...current, credit_card_id: value, payment_method_id: '', funding_account_id: '' })); setError(''); }} placeholder="Search bank, card, holder, or last digits" required locked={Boolean(initialCardId)}/>{initialCardId && <small className="locked-card-note">Selected automatically from the card row.</small>}</label>
+      {selectedCard && <div className="card-deposit-destination span-2"><span className="card-deposit-card-icon"><CreditCard size={21}/></span><div className="card-deposit-balance-summary"><p>{creditCardIdentity(selectedCard).accountName}</p><div className="card-deposit-balance-grid"><span className="current-balance"><small>CURRENT BALANCE</small><strong>{money(selectedCard.outstanding_balance, selectedCard.currency)}</strong><em>Amount currently owed</em></span><span className="deposit-balance"><small>DEPOSIT BALANCE</small><strong>{money(selectedCard.deposit_balance, selectedCard.currency)}</strong><em>Unused deposited funds</em></span><span className="available-credit"><small>AVAILABLE CREDIT</small><strong>{money(selectedCard.available_credit, selectedCard.currency)}</strong><em>Remaining spending capacity</em></span></div></div></div>}
+      <label>Deposit method <b>*</b><select name="payment_method_id" value={form.payment_method_id} onChange={update} required><option value="">Select method</option>{methods.map(method => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+      <label>Funding account <b>*</b><select name="funding_account_id" value={form.funding_account_id} onChange={update} disabled={!form.payment_method_id || fundingLoading} required><option value="">{fundingLoading ? 'Loading accounts…' : 'Select source account'}</option>{fundingAccounts.map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account, { includeBalance: true })}</option>)}</select></label>
+      <label>Deposit amount <b>*</b><input name="amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={update} placeholder="Enter any amount" required/>{selectedFunding && amount > sourceAvailable && <small className="account-field-error">Amount exceeds the source balance of {money(sourceAvailable, selectedFunding.currency)}.</small>}</label>
+      <label>Deposit date <b>*</b><input name="payment_date" type="date" value={form.payment_date} onChange={update} required/></label>
+      <label className="span-2">Reference <small>Optional</small><input name="reference" value={form.reference} onChange={update} placeholder="Deposit or transfer reference"/></label>
+    </div>}
+    <div className="card-deposit-note"><ShieldCheck size={16}/><span>The deposit becomes general card credit. New card transactions can post only when the selected card has enough available credit.</span></div>
+    <div className="modal-actions"><button type="button" className="text-button" onClick={onClose} disabled={submitting}>Cancel</button><button type="submit" className="primary-button" disabled={!ready || submitting}>{submitting ? <><RefreshCw className="spin" size={15}/>Posting…</> : <><Plus size={15}/>Post deposit</>}</button></div>
+  </form></div>;
+}
+
 function CreditCardsPage({ view = 'list' }) {
   const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
   const [cards, setCards] = useState([]);
@@ -2194,6 +2813,19 @@ function CreditCardsPage({ view = 'list' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [depositCardId, setDepositCardId] = useState('');
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositNotice, setDepositNotice] = useState('');
+  const [settleTarget, setSettleTarget] = useState(null);
+  const [settling, setSettling] = useState(false);
+  const [settlementError, setSettlementError] = useState('');
+  const [settlementHasExpense, setSettlementHasExpense] = useState(false);
+  const [settlementExpenseAmount, setSettlementExpenseAmount] = useState('');
+  const [settlementExpenseDetails, setSettlementExpenseDetails] = useState('');
+  const [settlementExpenseItemId, setSettlementExpenseItemId] = useState('');
+  const [settlementExpenseItems, setSettlementExpenseItems] = useState([]);
+  const [settlementExpenseLoading, setSettlementExpenseLoading] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -2210,7 +2842,7 @@ function CreditCardsPage({ view = 'list' }) {
     let current = true;
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ as_of: asOf });
+    const params = new URLSearchParams({ as_of: asOf, active: '1' });
     if (institutionId) params.set('financial_institution_id', institutionId);
     accountingApi.creditCards(`?${params.toString()}`)
       .then(response => {
@@ -2221,6 +2853,34 @@ function CreditCardsPage({ view = 'list' }) {
       .finally(() => current && setLoading(false));
     return () => { current = false; };
   }, [asOf, institutionId, refreshVersion]);
+  useEffect(() => {
+    if (!settleTarget) {
+      setSettlementHasExpense(false);
+      setSettlementExpenseAmount('');
+      setSettlementExpenseDetails('');
+      setSettlementExpenseItemId('');
+      setSettlementExpenseItems([]);
+      return;
+    }
+    let current = true;
+    setSettlementHasExpense(false);
+    setSettlementExpenseAmount('');
+    setSettlementExpenseDetails('');
+    setSettlementExpenseItemId('');
+    setSettlementExpenseLoading(true);
+    accountingApi.expenseItems('?active=1&hidden=0')
+      .then(response => {
+        if (!current) return;
+        const items = (Array.isArray(response) ? response : response?.data || [])
+          .filter(item => item.category?.code === 'CREDIT_CARD_FEES');
+        setSettlementExpenseItems(items);
+        const preferred = items.find(item => item.system_key === 'CREDIT_CARD_INTEREST') || items[0];
+        setSettlementExpenseItemId(preferred ? String(preferred.id) : '');
+      })
+      .catch(() => current && setSettlementExpenseItems([]))
+      .finally(() => current && setSettlementExpenseLoading(false));
+    return () => { current = false; };
+  }, [settleTarget?.id]);
   const upcomingOnly = view === 'upcoming';
   const visibleCards = upcomingOnly
     ? cards.filter(card => Number(card.amount_due || 0) > 0 || Number(card.nearest_payable_amount ?? card.next_due_amount ?? 0) > 0)
@@ -2230,23 +2890,69 @@ function CreditCardsPage({ view = 'list' }) {
   const summaryCurrency = currencies.length === 1 ? currencies[0] : null;
   const totalOutstanding = visibleCards.reduce((sum, card) => sum + Number(card.outstanding_balance || 0), 0);
   const totalDue = visibleCards.reduce((sum, card) => sum + Number(card.amount_due || 0), 0);
+  const totalDepositBalance = visibleCards.reduce((sum, card) => sum + Number(card.deposit_balance || 0), 0);
   const totalAvailable = visibleCards.reduce((sum, card) => sum + Number(card.available_credit || 0), 0);
   const urgentCount = visibleCards.filter(card => ['OVERDUE', 'DUE_TODAY', 'DUE_URGENT', 'DUE_SOON'].includes(card.due_status)).length;
   const summaryMoney = value => summaryCurrency ? money(value, summaryCurrency) : '—';
+  const openDeposit = (cardId, amount = '') => {
+    setDepositCardId(cardId ? String(cardId) : '');
+    setDepositAmount(amount ? String(amount) : '');
+    setDepositOpen(true);
+  };
+  const settlementAmountDue = Number(settleTarget?.amount_due || 0);
+  const settlementAdditionalExpense = settlementHasExpense ? Number(settlementExpenseAmount || 0) : 0;
+  const settlementTotal = settlementAmountDue + settlementAdditionalExpense;
+  const settlementDepositBalance = Number(settleTarget?.deposit_balance || 0);
+  const settlementStatement = settleTarget?.unpaid_statements?.[0];
+  const settlementReady = Boolean(settleTarget)
+    && settlementTotal > 0
+    && settlementDepositBalance + .00001 >= settlementTotal
+    && (!settlementHasExpense || (settlementAdditionalExpense > 0 && settlementExpenseItemId && settlementStatement));
+  const confirmSettlement = async event => {
+    event.preventDefault();
+    if (!settlementReady || settling) return;
+    setSettling(true);
+    setSettlementError('');
+    try {
+      const result = await accountingApi.settleCreditCardFromBalance(settleTarget.id, {
+        payment_date: today,
+        statement_id: settlementStatement?.id || null,
+        amount: settlementTotal,
+        ...(settlementHasExpense ? {
+          additional_expense_amount: settlementAdditionalExpense,
+          expense_item_id: Number(settlementExpenseItemId),
+          expense_reason: settlementExpenseDetails.trim() || 'Interest or penalty included in credit-card payment',
+          expense_reference: settlementStatement?.number || null,
+        } : {}),
+      });
+      const settled = result?.data || result;
+      setSettleTarget(null);
+      setDepositNotice(`${money(settled.amount, settleTarget.currency)} was paid from ${settleTarget.name}'s deposit balance${settlementHasExpense ? `, including ${money(settlementAdditionalExpense, settleTarget.currency)} recorded as an expense` : ''}.`);
+      setRefreshVersion(version => version + 1);
+    } catch (requestError) {
+      const validationMessage = requestError.details && Object.values(requestError.details).flat()[0];
+      setSettlementError(validationMessage || requestError.message || 'The card due could not be paid from its deposit balance.');
+    } finally {
+      setSettling(false);
+    }
+  };
 
   return <main className="content inner-page credit-cards-page">
-    <div className="title-row credit-title-row"><div><p className="eyebrow">MONEY</p><h1>{upcomingOnly ? 'Credit card upcoming dues' : 'Credit card list'}</h1><p>{upcomingOnly ? 'Review cards with unpaid balances and upcoming payment deadlines.' : 'Track balances, available credit, and upcoming payment deadlines.'}</p></div>{upcomingOnly && <AppLink href={pagePath('credit-cards', null, { view: 'new' })} className="primary-button"><Plus size={17}/>New transaction</AppLink>}</div>
+    <div className="title-row credit-title-row"><div><p className="eyebrow">MONEY</p><h1>{upcomingOnly ? 'Credit card upcoming dues' : 'Credit card accounts'}</h1><p>{upcomingOnly ? 'Review cards with unpaid balances and upcoming payment deadlines.' : 'Track balances, available credit, and upcoming payment deadlines.'}</p></div><div className="credit-title-actions"><button className="secondary-button card-deposit-button" onClick={() => openDeposit('')} disabled={loading || cards.length === 0}><Banknote size={17}/>Deposit balance</button></div></div>
+
+    {depositNotice && <div className="account-save-message success"><Check size={18}/><span><strong>Card balance deposited</strong>{depositNotice}</span><button type="button" onClick={() => setDepositNotice('')}>Dismiss</button></div>}
 
     {!loading && !error && visibleCards.length > 0 && <section className="credit-summary" aria-label="Credit card summary">
       <div><span>Outstanding balance</span><strong>{summaryMoney(totalOutstanding)}</strong><small>{summaryCurrency ? `Across ${visibleCards.length} card${visibleCards.length === 1 ? '' : 's'}` : 'Multiple currencies'}</small></div>
       <div className={urgentCount ? 'summary-urgent' : ''}><span>Amount due</span><strong>{summaryMoney(totalDue)}</strong><small>{urgentCount ? `${urgentCount} card${urgentCount === 1 ? '' : 's'} need attention` : 'No urgent cards'}</small></div>
+      <div className="summary-deposit"><span>Deposit balance</span><strong>{summaryMoney(totalDepositBalance)}</strong><small>Unconsumed funds</small></div>
       <div><span>Available credit</span><strong>{summaryMoney(totalAvailable)}</strong><small>As of {calendarDate(asOf)}</small></div>
       {(() => { const nearest = visibleCards.find(card => Number(card.nearest_payable_amount ?? card.next_due_amount ?? 0) > 0); return <div><span>Nearest payable</span><strong>{nearest ? money(nearest.nearest_payable_amount ?? nearest.next_due_amount, nearest.currency) : summaryMoney(0)}</strong><small>{nearest ? `Due ${calendarDate(nearest.nearest_payable_due_date ?? nearest.nearest_due_date)}` : 'No unpaid statements'}</small></div>; })()}
     </section>}
 
     <section className="panel credit-list-panel">
       <div className="credit-list-toolbar">
-        <div><strong>{upcomingOnly ? 'Cards with upcoming dues' : 'All credit cards'}</strong><small>{visibleCards.length} card{visibleCards.length === 1 ? '' : 's'} as of {calendarDate(asOf)}</small></div>
+        <div><strong>{upcomingOnly ? 'Cards with upcoming dues' : 'All credit card accounts'}</strong><small>{visibleCards.length} card{visibleCards.length === 1 ? '' : 's'} as of {calendarDate(asOf)}</small></div>
         <div className="credit-list-filters">
           <select value={institutionId} onChange={event => setInstitutionId(event.target.value)} aria-label="Financial institution">
             <option value="">All institutions</option>
@@ -2267,9 +2973,11 @@ function CreditCardsPage({ view = 'list' }) {
           <span role="columnheader">Account holder</span>
           <span role="columnheader">Outstanding balance</span>
           <span role="columnheader">Amount due</span>
+          <span role="columnheader">Deposit balance</span>
           <span role="columnheader">Nearest payable</span>
           <span role="columnheader">Available credit</span>
           <span role="columnheader">Status</span>
+          <span role="columnheader">Action</span>
           <span aria-hidden="true"/>
         </div>
         {visibleCards.map(card => {
@@ -2284,17 +2992,142 @@ function CreditCardsPage({ view = 'list' }) {
             : `${Number(card.days_until_due || 0)} day${Number(card.days_until_due || 0) === 1 ? '' : 's'} remaining`;
           const nearestDueDate = card.nearest_payable_due_date ?? card.nearest_due_date;
           const nearestPayable = card.nearest_payable_amount ?? card.next_due_amount ?? 0;
+          const amountDue = Number(card.amount_due || 0);
+          const depositBalance = Number(card.deposit_balance || 0);
+          const canPayDue = amountDue > 0 && depositBalance + .00001 >= amountDue;
+          const actionLabel = amountDue <= 0 ? 'No amount due' : canPayDue ? 'Pay due' : `Deposit ${money(Math.max(0, amountDue - depositBalance), card.currency)}`;
+          const performAction = event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (amountDue <= 0) return;
+            if (canPayDue) {
+              setSettlementError('');
+              setSettleTarget(card);
+            } else {
+              openDeposit(card.id, Math.max(0, amountDue - depositBalance).toFixed(2));
+            }
+          };
           return <AppLink href={pagePath('credit-cards', card.id, { asOf })} className={`credit-list-row status-${status.toLowerCase()}`} key={card.id} role="row" aria-label={`View ${identity.accountName} details`}>
             <span className="credit-list-identity" role="cell"><i><CreditCard size={17}/></i><span><strong>{identity.accountName}</strong><small>{identity.institutionName} · {identity.accountNumber} · {card.currency || 'PHP'}</small></span></span>
             <span className="credit-list-holder" role="cell"><strong>{identity.accountHolderName}</strong><small>Linked account holder</small></span>
             <span className="credit-list-money" role="cell"><strong>{money(card.outstanding_balance, card.currency)}</strong><small>{utilization.toFixed(0)}% of {money(card.credit_limit, card.currency)} limit</small></span>
             <span className="credit-list-money due" role="cell"><strong>{money(card.amount_due, card.currency)}</strong><small>{(card.unpaid_statements || []).length} open statement{(card.unpaid_statements || []).length === 1 ? '' : 's'}</small></span>
+            <span className="credit-list-money deposit-balance" role="cell"><strong>{money(card.deposit_balance, card.currency)}</strong><small>Unconsumed funds</small></span>
             <span className={`credit-list-payable ${status.toLowerCase()}`} role="cell"><strong>{nearestDueDate ? calendarDate(nearestDueDate) : '—'}</strong><small>{Number(nearestPayable) > 0 ? `${money(nearestPayable, card.currency)} · ${dueCopy}` : dueCopy}</small></span>
             <span className="credit-list-money available" role="cell"><strong>{money(card.available_credit, card.currency)}</strong><small>{card.next_closing_date ? `Closes ${calendarDate(card.next_closing_date)}` : 'No closing date'}</small></span>
             <span className="credit-list-status" role="cell"><em className={`due-status ${status.toLowerCase()}`}>{dueStatusLabels[status] || humanize(status)}</em></span>
+            <span className="credit-list-settle-action" role="cell"><span role="button" tabIndex={amountDue > 0 ? 0 : -1} aria-disabled={amountDue <= 0} className={`card-pay-due-button ${canPayDue ? 'ready' : amountDue > 0 ? 'needs-deposit' : 'disabled'}`} onClick={performAction} onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && amountDue > 0) performAction(event); }}>{canPayDue && <ArrowLeftRight size={13}/>} {!canPayDue && amountDue > 0 && <Banknote size={13}/>} {actionLabel}</span></span>
             <ChevronRight className="credit-list-chevron" size={17} aria-hidden="true"/>
           </AppLink>;
         })}
+      </div>}
+    </section>
+    {depositOpen && <CreditCardDepositDialog
+      cards={cards}
+      initialCardId={depositCardId}
+      initialAmount={depositAmount}
+      onClose={() => setDepositOpen(false)}
+      onDeposited={(result, card) => {
+        setDepositOpen(false);
+        setDepositNotice(`${money(result.amount, card.currency)} was added to ${card.name} as unconsumed deposit balance.`);
+        setRefreshVersion(version => version + 1);
+      }}
+    />}
+    {settleTarget && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && !settling && setSettleTarget(null)}><form className="modal credit-balance-settlement-modal" onSubmit={confirmSettlement}>
+      <div className="modal-head"><div><p className="eyebrow">PAY FROM DEPOSIT BALANCE</p><h2>Pay {money(settlementTotal, settleTarget.currency)}?</h2><p>Record one card payment and optionally allocate an included interest or penalty amount to expense.</p></div><button type="button" className="icon-button" onClick={() => setSettleTarget(null)} disabled={settling}><X size={19}/></button></div>
+      {settlementError && <div className="payment-form-error card-deposit-error" role="alert"><CircleHelp size={16}/><span>{settlementError}</span></div>}
+      <div className="credit-settlement-summary"><span>Credit card<strong>{settleTarget.name}</strong></span><span>Original amount due<strong>{money(settlementAmountDue, settleTarget.currency)}</strong></span><span>Deposit balance<strong>{money(settlementDepositBalance, settleTarget.currency)}</strong></span><span>Balance after payment<strong className={settlementDepositBalance < settlementTotal ? 'red' : ''}>{money(settlementDepositBalance - settlementTotal, settleTarget.currency)}</strong></span></div>
+      <div className="credit-settlement-expense">
+        <label className="settlement-expense-toggle"><input type="checkbox" checked={settlementHasExpense} onChange={event => { setSettlementHasExpense(event.target.checked); setSettlementError(''); }}/><span><strong>Payment includes interest or penalty</strong><small>Record the amount above the original due as a linked expense.</small></span></label>
+        {settlementHasExpense && <div className="settlement-expense-fields">
+          <div className="settlement-expense-category"><span>Expense category</span><strong>Credit Card Interest and Fees</strong><small>Fixed for credit-card settlements</small></div>
+          <label>Interest / penalty amount <b>*</b><input type="number" min="0.01" step="0.01" value={settlementExpenseAmount} onChange={event => { setSettlementExpenseAmount(event.target.value); setSettlementError(''); }} placeholder="0.00" required/></label>
+          <label>Expense <b>*</b><select value={settlementExpenseItemId} onChange={event => setSettlementExpenseItemId(event.target.value)} disabled={settlementExpenseLoading} required><option value="">{settlementExpenseLoading ? 'Loading expenses…' : 'Select expense'}</option>{settlementExpenseItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+          <label className="settlement-expense-details">Details <small>Optional</small><textarea value={settlementExpenseDetails} onChange={event => setSettlementExpenseDetails(event.target.value)} maxLength="1000" rows="3" placeholder="Describe the interest, penalty, statement period, or supporting reference"/></label>
+          <div className="settlement-expense-allocation"><span>Original due<strong>{money(settlementAmountDue, settleTarget.currency)}</strong></span><span>Expense<strong>{money(settlementAdditionalExpense, settleTarget.currency)}</strong></span><span>Total payment<strong>{money(settlementTotal, settleTarget.currency)}</strong></span></div>
+        </div>}
+        {settlementDepositBalance < settlementTotal && <small className="account-field-error">Deposit {money(settlementTotal - settlementDepositBalance, settleTarget.currency)} more before posting this payment.</small>}
+      </div>
+      <div className="modal-actions"><button type="button" className="text-button" onClick={() => setSettleTarget(null)} disabled={settling}>Cancel</button><button type="submit" className="primary-button apply-deposit-confirm" disabled={settling || !settlementReady}>{settling ? <><RefreshCw className="spin" size={15}/>Paying…</> : <><ArrowLeftRight size={15}/>Pay {money(settlementTotal, settleTarget.currency)}</>}</button></div>
+    </form></div>}
+  </main>;
+}
+
+function CreditCardAccountDetailPage({ cardId }) {
+  const today = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
+  const asOf = useMemo(() => new URLSearchParams(window.location.search).get('as_of') || today, [today]);
+  const [card, setCard] = useState(null);
+  const [movements, setMovements] = useState(null);
+  const [tab, setTab] = useState('transactions');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    setError('');
+    Promise.all([
+      accountingApi.creditCard(cardId, `?as_of=${encodeURIComponent(asOf)}`),
+      accountingApi.accountMovements(cardId, '?sort=latest'),
+    ]).then(([cardResponse, movementResponse]) => {
+      if (!current) return;
+      setCard(cardResponse?.data || cardResponse);
+      setMovements(movementResponse);
+    }).catch(requestError => current && setError(requestError.message || 'Credit-card account details could not be loaded.'))
+      .finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, [asOf, cardId]);
+
+  if (loading) return <main className="content inner-page card-detail-page"><div className="transaction-state"><RefreshCw className="spin" size={22}/><strong>Loading credit-card account…</strong></div></main>;
+  if (error || !card) return <main className="content inner-page card-detail-page"><div className="transaction-state error-state"><CircleHelp size={22}/><strong>Unable to load credit-card account</strong><span>{error}</span><AppLink href={pagePath('credit-cards')} className="secondary-button">Back to credit card accounts</AppLink></div></main>;
+
+  const currency = card.currency || 'PHP';
+  const identity = creditCardIdentity(card);
+  const status = card.due_status || 'NO_AMOUNT_DUE';
+  const statements = card.statement_history || [];
+  const movementRows = apiRecords(movements);
+  const movementSummary = Array.isArray(movements) ? {} : movements?.summary || {};
+  const deposited = movementRows.filter(item => item.direction === 'IN_BOUND').reduce((sum, item) => sum + Number(item.amount || item.credit || 0), 0);
+  const debited = movementRows.filter(item => item.direction === 'OUT_BOUND').reduce((sum, item) => sum + Number(item.amount || item.debit || 0), 0);
+  const paidTransactions = statements.reduce((sum, statement) => sum + (statement.payments || []).length, 0);
+
+  return <main className="content inner-page cheques-page checking-account-detail credit-card-account-detail">
+    <div className="cheque-detail-back"><AppLink href={pagePath('credit-cards')}><ArrowLeft size={15}/>Back to credit card accounts</AppLink></div>
+    <section className="checking-detail-hero">
+      <div><span><CreditCard size={25}/></span><div><p className="eyebrow">CREDIT CARD ACCOUNT</p><h1>{identity.institutionName} · {identity.accountName}</h1><small>{identity.accountHolderName} · {identity.accountNumber} · {currency}</small></div></div>
+      <div><small>AVAILABLE CREDIT</small><strong>{money(card.available_credit, currency)}</strong><em>{dueStatusLabels[status] || humanize(status)}</em></div>
+    </section>
+    <section className="checking-detail-stats">
+      <article><span>Outstanding balance</span><strong>{money(card.outstanding_balance, currency)}</strong><small>{statements.filter(statement => Number(statement.balance_due || 0) > 0).length} open statement{statements.filter(statement => Number(statement.balance_due || 0) > 0).length === 1 ? '' : 's'}</small></article>
+      <article><span>Paid transactions</span><strong>{paidTransactions}</strong><small>Applied card payments</small></article>
+      <article><span>Deposited</span><strong>{money(deposited, currency)}</strong><small>Inbound in loaded history</small></article>
+      <article><span>Debited</span><strong>{money(debited, currency)}</strong><small>Outbound in loaded history</small></article>
+    </section>
+    <section className="panel checking-detail-panel">
+      <div className="checking-detail-tabs">
+        <button className={tab === 'transactions' ? 'active' : ''} onClick={() => setTab('transactions')}><ReceiptText size={18}/><span><strong>Credit card transactions</strong><small>Statements, payments, and balances</small></span></button>
+        <button className={tab === 'movements' ? 'active' : ''} onClick={() => setTab('movements')}><WalletCards size={18}/><span><strong>Deposits &amp; debits</strong><small>Balance movement details</small></span></button>
+      </div>
+      {tab === 'transactions' ? <div className="checking-transaction-table">
+        <div className="checking-transaction-row head"><span>Statement</span><span>Statement date</span><span>Due date</span><span>Amount</span><span>Status</span></div>
+        {!statements.length && <div className="checking-empty-row">No credit-card transactions recorded for this account.</div>}
+        {statements.map(statement => {
+          const statementStatus = String(statement.status || (Number(statement.balance_due || 0) > 0 ? 'open' : 'paid')).toLowerCase();
+          const payments = statement.payments || [];
+          const expenses = statement.linked_expenses || [];
+          return <div className="checking-transaction-row" key={statement.id}>
+            <span><strong>{statement.number || `Statement ${statement.id}`}</strong><small>{payments.length} payment{payments.length === 1 ? '' : 's'}{expenses.length ? ` · ${expenses.length} linked expense${expenses.length === 1 ? '' : 's'}` : ''}</small></span>
+            <span><strong>{calendarDate(statement.statement_date)}</strong></span>
+            <span><strong>{calendarDate(statement.due_date)}</strong><small>{money(statement.balance_due, currency)} remaining</small></span>
+            <span className="amount"><strong>{money(statement.total_amount, currency)}</strong></span>
+            <span><em className={`due-status ${statementStatus}`}>{humanize(statementStatus)}</em></span>
+          </div>;
+        })}
+      </div> : <div className="checking-movement-table">
+        <div className="checking-movement-summary"><span>Total debits <strong>{money(movementSummary.total_debit ?? debited, currency)}</strong></span><span>Total credits <strong>{money(movementSummary.total_credit ?? deposited, currency)}</strong></span></div>
+        <div className="checking-movement-row head"><span>Date / journal</span><span>Transaction</span><span>Direction</span><span>Debit</span><span>Credit</span><span>Balance effect</span></div>
+        {!movementRows.length && <div className="checking-empty-row">No deposits or debits recorded for this credit-card account.</div>}
+        {movementRows.map(item => <div className="checking-movement-row" key={item.id}><span><strong>{calendarDate(item.entry_date)}</strong><small>{item.journal_number}</small></span><span><strong>{humanize(item.movement_type)}</strong><small>{item.description || item.transaction?.reference || 'Account movement'}</small></span><span><b className={`movement-direction ${item.direction === 'IN_BOUND' ? 'in' : 'out'}`}>{item.direction === 'IN_BOUND' ? <ArrowDownLeft size={13}/> : <ArrowUpRight size={13}/>} {humanize(item.direction)}</b></span><span>{money(item.debit, currency)}</span><span>{money(item.credit, currency)}</span><span className={Number(item.balance_effect || 0) < 0 ? 'negative-money' : 'positive-money'}><strong>{money(item.balance_effect, currency)}</strong></span></div>)}
       </div>}
     </section>
   </main>;
@@ -2454,7 +3287,6 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
       <span className={`due-status visual-due-status ${status.toLowerCase()}`}>{dueStatusLabels[status] || humanize(status)}</span>
     </section>
     <nav className="credit-quick-actions" aria-label="Credit card actions">
-      <button onClick={() => openDetailSection(detailTab, 'card-payment')}><span><Banknote size={22}/></span><strong>Pay</strong><small>Make a payment</small></button>
       <button onClick={() => openDetailSection('history', 'card-tabs')}><span><ReceiptText size={22}/></span><strong>Statements</strong><small>{statements.length} records</small></button>
       <button onClick={() => openDetailSection('history', 'card-tabs')}><span><Activity size={22}/></span><strong>History</strong><small>{totalPayments} payments</small></button>
       <AppLink href={pagePath('accounts', cardId, { view: 'adjustments', asOf, from: 'credit-card' })}><span><SlidersHorizontal size={22}/></span><strong>Adjust</strong><small>Match actual SOA</small></AppLink>
@@ -2467,18 +3299,20 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
       {detailTab === 'history' && <div className="panel statement-history-panel"><div className="panel-head"><div><h2>Statement history</h2><p>Every statement with the payments applied to it</p></div><span className="transaction-count">{statements.length} records</span></div>
         {statements.length === 0 ? <div className="transaction-state"><ReceiptText size={21}/><strong>No statements yet</strong><span>Statement history will appear here when available.</span></div> : <div className="statement-history-list">{statements.map(statement => {
           const payments = statement.payments || [];
+          const linkedExpenses = statement.linked_expenses || [];
           const statementStatus = String(statement.status || (Number(statement.balance_due || 0) > 0 ? 'open' : 'paid')).toLowerCase();
           return <article className="history-statement" key={statement.id}>
             <div className="history-statement-head"><div><span className="history-statement-number">{statement.number}</span><small>{calendarDate(statement.statement_date)} statement · due {calendarDate(statement.due_date)}</small></div><span className={`history-status ${statementStatus}`}>{humanize(statementStatus)}</span></div>
             <div className="history-statement-totals"><span>Total<strong>{money(statement.total_amount, currency)}</strong></span><span>Paid<strong className="green">{money(statement.paid_amount, currency)}</strong></span><span>Minimum due<strong>{money(statement.minimum_due, currency)}</strong></span><span>Balance due<strong className={Number(statement.balance_due || 0) > 0 ? 'red' : ''}>{money(statement.balance_due, currency)}</strong></span></div>
             <div className="applied-payments"><div className="applied-payments-title"><span>Applied payments</span><small>{payments.length}</small></div>{payments.length === 0 ? <p>No payments applied to this statement.</p> : payments.map((payment, index) => <div className="applied-payment-row" key={payment.id || index}><span className="payment-check"><Check size={13}/></span><span><strong>{payment.number || payment.reference || `Payment ${index + 1}`}</strong><small>{payment.account?.name || payment.financial_account?.name || payment.payment_method?.name || 'Credit card payment'}</small></span><span><strong>{calendarDate(payment.payment_date || payment.date || payment.paid_at)}</strong><small>{humanize(payment.status || 'Applied')}</small></span><strong>{money(payment.amount || payment.applied_amount, currency)}</strong></div>)}</div>
+            {linkedExpenses.length > 0 && <div className="linked-card-expenses"><div className="applied-payments-title"><span>Linked expenses</span><small>{linkedExpenses.length}</small></div>{linkedExpenses.map(expense => <AppLink className="linked-card-expense-row" href={pagePath('expenses', null, { view: 'ledger', expense_id: expense.id, search: expense.number })} key={expense.id}><span><ReceiptText size={14}/></span><span><strong>{expense.expense_item?.name || 'Credit card expense'}</strong><small>{expense.expense_category?.name || 'Credit Card Interest and Fees'} · {expense.number}</small></span><span><strong>{calendarDate(expense.expense_date)}</strong><small>View expense details</small></span><strong>{money(expense.amount, expense.currency || currency)}</strong><ChevronRight size={15}/></AppLink>)}</div>}
           </article>;
         })}</div>}
       </div>}
       {detailTab === 'information' && <section className="panel card-information-panel"><div className="panel-head"><div><h2>Card information</h2><p>Account identity, billing cycle, limits, and current position</p></div></div><div className="card-information-grid"><span>Financial institution<strong>{identity.institutionName}</strong></span><span>Account name<strong>{identity.accountName}</strong></span><span>Account holder name<strong>{identity.accountHolderName}</strong></span><span>Account number<strong>{identity.accountNumber}</strong></span><span>Currency<strong>{currency}</strong></span><span>Credit limit<strong>{money(card.credit_limit, currency)}</strong></span><span>Available credit<strong>{money(card.available_credit, currency)}</strong></span><span>Statement day<strong>Day {card.statement_day ?? '—'}</strong></span><span>Due day<strong>Day {card.due_day ?? '—'}</strong></span><span>Next closing date<strong>{calendarDate(card.next_closing_date)}</strong></span><span>Next due amount<strong>{money(card.next_due_amount, currency)}</strong></span></div></section>}
       {detailTab === 'manage' && <section className="panel card-manage-panel"><div className="panel-head"><div><h2>Manage card</h2><p>Account controls remain protected by the accounting backend</p></div></div><div className="card-manage-list"><div><span className="payment-planner-icon"><CalendarDays size={18}/></span><span><strong>Billing schedule</strong><small>Statement day {card.statement_day ?? '—'} · Due day {card.due_day ?? '—'}</small></span></div><div><span className="payment-planner-icon"><ShieldCheck size={18}/></span><span><strong>Payment protection</strong><small>Payments require confirmation and an idempotency key.</small></span></div></div></section>}
 
-      <aside className="panel payment-planner" id="card-payment"><div className="payment-planner-head"><span className="payment-planner-icon"><Banknote size={21}/></span><div><p className="eyebrow">CARD PAYMENT</p><h2>Make a payment</h2></div></div><p className="payment-planner-copy">Choose where the money comes from and how it should be applied. Payments post to the ledger immediately.</p>
+      <aside className="panel payment-planner card-specific-payment-retired" id="card-payment"><div className="payment-planner-head"><span className="payment-planner-icon"><Banknote size={21}/></span><div><p className="eyebrow">CARD PAYMENT</p><h2>Make a payment</h2></div></div><p className="payment-planner-copy">Choose where the money comes from and how it should be applied. Payments post to the ledger immediately.</p>
         {paymentError && <div className="payment-form-error" role="alert"><CircleHelp size={15}/><span>{paymentError}</span><button onClick={() => setPaymentError('')} aria-label="Dismiss"><X size={14}/></button></div>}
         {optionsLoading ? <div className="payment-options-loading"><RefreshCw className="spin" size={16}/>Loading payment options…</div> : <div className="payment-planner-form">
           <label>Apply payment<select value={selectedStatementId} onChange={event => { const nextId = event.target.value; const statement = statements.find(item => String(item.id) === String(nextId)); setSelectedStatementId(nextId); setPaymentAmount(String(statement?.balance_due ?? card.amount_due ?? '')); }}><option value="">Oldest unpaid statements first</option>{statements.filter(statement => Number(statement.balance_due || 0) > 0).map(statement => <option key={statement.id} value={statement.id}>{statement.number} · {money(statement.balance_due, currency)} due</option>)}</select></label>
@@ -2486,7 +3320,7 @@ function CreditCardDetailPage({ cardId, onBack, onAdjust }) {
           <label>Payment method<select value={paymentMethodId} onChange={event => { setPaymentMethodId(event.target.value); setFundingAccountId(''); }} required><option value="">Select payment method first</option>{paymentMethods.map(method => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
           <label>Pay from<select value={fundingAccountId} onChange={event => setFundingAccountId(event.target.value)} disabled={!paymentMethodId || fundingAccountsLoading} required><option value="">{!paymentMethodId ? 'Choose payment method first' : fundingAccountsLoading ? 'Loading applicable accounts…' : 'Select financial account'}</option>{compatibleFundingAccounts.map(account => {
             const available = Number(account.availableBalance || 0);
-            return <option key={account.id} value={account.id} disabled={available <= 0} style={{ fontWeight: available > 0 ? 700 : 400, color: available > 0 ? '#17251e' : '#9aa39e' }}>{account.institution?.name ? `${account.institution.name} · ` : ''}{account.name} · {available <= 0 ? '–' : `${money(available, account.currency || currency)} available`}</option>;
+            return <option key={account.id} value={account.id} disabled={available <= 0} style={{ fontWeight: available > 0 ? 700 : 400, color: available > 0 ? '#17251e' : '#9aa39e' }}>{financialAccountOptionLabel(account, { includeBalance: true })}</option>;
           })}</select>{paymentMethodId && !fundingAccountsLoading && compatibleFundingAccounts.length === 0 && <small className="amount-helper">No active financial accounts are available for this method and branch.</small>}</label>
           <label>Payment date<input type="date" value={paymentDate} onChange={event => setPaymentDate(event.target.value)} required/></label>
           <label>Reference <small>Optional</small><input value={reference} onChange={event => setReference(event.target.value)} placeholder="e.g. BANK-SETTLEMENT-1"/></label>
@@ -3062,11 +3896,11 @@ function LoanPaymentModal({ loan, installment, close, onPaid }) {
   const paymentMethodKey = String(selectedPaymentMethod?.code || selectedPaymentMethod?.slug || selectedPaymentMethod?.type || selectedPaymentMethod?.name || '').toLowerCase();
   const isChequePayment = paymentMethodKey.includes('cheque') || paymentMethodKey.includes('check');
   const paymentAccountLabel = account => {
-    const institutionName = account.financial_institution?.name || account.institution?.name;
-    const accountName = account.name || account.account_name || `Account ${account.id}`;
     const currentBalance = account.current_balance ?? account.currentBalance ?? account.balance;
-    const balanceLabel = isChequePayment || currentBalance == null ? '' : ` · ${money(currentBalance, account.currency || loan.currency)} current balance`;
-    return `${institutionName ? `${institutionName} · ` : ''}${accountName}${balanceLabel}`;
+    return financialAccountOptionLabel(account, {
+      includeBalance: !isChequePayment && currentBalance != null,
+      balance: 'current',
+    });
   };
   const choosePaymentMethod = value => {
     setFinancialInstitutions([]);
@@ -3694,7 +4528,7 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
       <article><span>Payments recorded</span><strong>{money(recordedPayments, currency)}</strong><small>{paymentEntryCount} payment entr{paymentEntryCount === 1 ? 'y' : 'ies'}{totalOverpayments > 0 ? ` · ${money(totalOverpayments, currency)} overpaid` : ''}</small></article>
     </section>
     <section className="panel loan-due-panel">
-      <div className="loan-due-filters"><label>From<input name="day_from" type="date" value={filters.day_from} onChange={updateFilter}/></label><label>Through<input name="day_to" type="date" min={filters.day_from} value={filters.day_to} onChange={updateFilter}/></label><label>As of<input name="as_of_date" type="date" value={filters.as_of_date} onChange={updateFilter}/></label><label>Direction<select name="direction" value={filters.direction} onChange={updateFilter}><option value="">All directions</option><option value="lent">Incoming</option><option value="borrowed">Outgoing</option></select></label><label>Financial account<select name="financial_account_id" value={filters.financial_account_id} onChange={updateFilter}><option value="">All accounts</option>{accountChoices.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label><label className="loan-overdue-toggle"><input name="include_overdue" type="checkbox" checked={filters.include_overdue} onChange={event => setFilters(current => ({ ...current, include_overdue: event.target.checked }))}/><span>Include older overdue</span></label><button className="icon-button" onClick={() => setRefreshVersion(value => value + 1)} aria-label="Refresh upcoming dues"><RefreshCw className={loading ? 'spin' : ''} size={17}/></button></div>
+      <div className="loan-due-filters"><label>From<input name="day_from" type="date" value={filters.day_from} onChange={updateFilter}/></label><label>Through<input name="day_to" type="date" min={filters.day_from} value={filters.day_to} onChange={updateFilter}/></label><label>As of<input name="as_of_date" type="date" value={filters.as_of_date} onChange={updateFilter}/></label><label>Direction<select name="direction" value={filters.direction} onChange={updateFilter}><option value="">All directions</option><option value="lent">Incoming</option><option value="borrowed">Outgoing</option></select></label><label>Financial account<select name="financial_account_id" value={filters.financial_account_id} onChange={updateFilter}><option value="">All accounts</option>{accountChoices.map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account)}</option>)}</select></label><label className="loan-overdue-toggle"><input name="include_overdue" type="checkbox" checked={filters.include_overdue} onChange={event => setFilters(current => ({ ...current, include_overdue: event.target.checked }))}/><span>Include older overdue</span></label><button className="icon-button" onClick={() => setRefreshVersion(value => value + 1)} aria-label="Refresh upcoming dues"><RefreshCw className={loading ? 'spin' : ''} size={17}/></button></div>
       {loading && <div className="transaction-state"><RefreshCw className="spin" size={21}/><strong>Loading upcoming dues…</strong></div>}
       {!loading && error && <div className="transaction-state error-state"><CircleHelp size={21}/><strong>Unable to load upcoming dues</strong><span>{error}</span></div>}
       {!loading && !error && dues.length === 0 && <div className="loan-empty"><span><CalendarDays size={23}/></span><h2>No loan payments due</h2><p>There are no unpaid installments from {calendarDate(filters.day_from)} through {calendarDate(filters.day_to)}.</p></div>}
@@ -3720,9 +4554,93 @@ function LoanUpcomingDuesPage({ onSelectLoan, onAddLoan }) {
   </main>;
 }
 
+function LoanPaidPaymentsPage({ onSelectLoan }) {
+  const emptyFilters = { loan_id: '', payment_method_id: '', financial_account_id: '', status: '', date_from: '', date_to: '', search: '' };
+  const [filters, setFilters] = useState(emptyFilters);
+  const [response, setResponse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
+  const [voidError, setVoidError] = useState('');
+  const [voidResult, setVoidResult] = useState(null);
+
+  useEffect(() => {
+    let current = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError('');
+      const params = new URLSearchParams({ page: String(page), per_page: '20' });
+      Object.entries(filters).forEach(([key, value]) => value && params.set(key, value));
+      accountingApi.paidLoanPayments(`?${params.toString()}`)
+        .then(result => current && setResponse(result))
+        .catch(requestError => current && setError(loanErrorMessage(requestError, 'Paid loan transactions could not be loaded.')))
+        .finally(() => current && setLoading(false));
+    }, filters.search ? 250 : 0);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [filters, page, refreshKey]);
+
+  const update = event => {
+    const { name, value } = event.target;
+    setFilters(current => ({ ...current, [name]: value }));
+    setPage(1);
+  };
+  const closeVoid = () => {
+    if (voiding) return;
+    setVoidTarget(null); setVoidReason(''); setVoidError('');
+  };
+  const submitVoid = async event => {
+    event.preventDefault();
+    if (!voidTarget || !voidReason.trim()) return;
+    setVoiding(true); setVoidError('');
+    try {
+      const result = await accountingApi.voidLoanPayment(voidTarget.loan_id, voidTarget.id, voidReason.trim());
+      setVoidResult(result); setVoidTarget(null); setVoidReason(''); setRefreshKey(value => value + 1);
+    } catch (requestError) {
+      setVoidError(loanErrorMessage(requestError, 'This loan payment could not be voided.'));
+    } finally {
+      setVoiding(false);
+    }
+  };
+
+  const records = response?.data || [];
+  const summary = response?.summary || {};
+  const options = response?.options || {};
+  const hasFilters = Object.values(filters).some(Boolean);
+  const partyName = loan => loan?.borrower_name || loan?.user_account?.name || loan?.counterparty?.name || loan?.party_name || loan?.financial_institution?.name || 'Loan account';
+
+  return <main className="content inner-page loan-paid-page">
+    <div className="title-row"><div><p className="eyebrow">LOANS</p><h1>Paid loans</h1><p>Review posted and voided loan payments, their funding accounts, and reversal history.</p></div><button type="button" className="secondary-button" onClick={() => setRefreshKey(value => value + 1)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div>
+    <section className="loan-paid-summary"><article><span>Total paid</span><strong>{money(summary.total_paid || 0, 'PHP')}</strong><small>Voided payments are excluded</small></article><article><span>Transactions</span><strong>{summary.transaction_count || 0}</strong><small>{summary.posted_count || 0} posted · {summary.voided_count || 0} voided</small></article></section>
+    <section className="panel loan-paid-panel">
+      <div className="loan-paid-filters">
+        <label>Loan<select name="loan_id" value={filters.loan_id} onChange={update}><option value="">All loans</option>{(options.loans || []).map(loan => <option key={loan.id} value={loan.id}>{loan.number} · {partyName(loan)}</option>)}</select></label>
+        <label>Payment method<select name="payment_method_id" value={filters.payment_method_id} onChange={update}><option value="">All methods</option>{(options.payment_methods || []).map(method => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>
+        <label>Financial account<select name="financial_account_id" value={filters.financial_account_id} onChange={update}><option value="">All accounts</option>{(options.financial_accounts || []).map(account => <option key={account.id} value={account.id}>{financialAccountOptionLabel(account)}</option>)}</select></label>
+        <label>Status<select name="status" value={filters.status} onChange={update}><option value="">All statuses</option><option value="posted">Posted</option><option value="voided">Voided</option></select></label>
+        <label>Paid from<input name="date_from" type="date" value={filters.date_from} onChange={update}/></label>
+        <label>Paid to<input name="date_to" type="date" min={filters.date_from || undefined} value={filters.date_to} onChange={update}/></label>
+        <label className="loan-paid-search">Search<div><Search size={15}/><input name="search" value={filters.search} onChange={update} placeholder="Loan, party, account, or reference"/></div></label>
+        {hasFilters && <button type="button" className="secondary-button" onClick={() => { setFilters(emptyFilters); setPage(1); }}>Clear filters</button>}
+      </div>
+      {loading && <div className="loan-paid-state"><RefreshCw className="spin" size={22}/><span>Loading loan payments…</span></div>}
+      {!loading && error && <div className="portal-login-error" role="alert"><CircleHelp size={16}/><span>{error}</span></div>}
+      {!loading && !error && records.length === 0 && <div className="loan-paid-state"><CheckCircle2 size={24}/><strong>No paid loan transactions found</strong><span>Posted loan payments will appear here.</span></div>}
+      {!loading && !error && records.length > 0 && <div className="loan-paid-table"><div className="loan-paid-row head"><span>Payment / reference</span><span>Loan / party</span><span>Method / account</span><span>Date / status</span><span>Allocation</span><span>Amount</span><span>Action</span></div>{records.map(payment => { const loan = payment.loan || {}; const isVoided = payment.status === 'voided'; const allocated = (payment.allocations || []).reduce((total, allocation) => total + Number(allocation.principal_amount || 0) + Number(allocation.interest_amount || 0) + Number(allocation.overdue_interest_amount || 0), 0); return <div className={`loan-paid-row ${isVoided ? 'voided-loan-payment' : ''}`} key={payment.id}><span><strong>{payment.reference || `PAY-${payment.id}`}</strong><small>{payment.notes || `Payment #${payment.id}`}</small>{isVoided && <small>Reason: {payment.void_reason || 'Not provided'}</small>}</span><span><button type="button" className="loan-payment-link" onClick={() => onSelectLoan(loan.id)}>{loan.number || `Loan ${loan.id}`}</button><small>{partyName(loan)}</small><small>{humanize(loan.direction || 'loan')}</small></span><span><strong>{payment.payment_method?.name || 'Payment method'}</strong><small>{payment.financial_account?.name || 'Financial account'}</small><small>{payment.financial_account?.institution?.name || ''}</small></span><span><strong>{calendarDate(payment.payment_date)}</strong><small className={`loan-payment-status ${isVoided ? 'voided' : 'posted'}`}>{isVoided ? 'Voided' : 'Posted'}</small>{isVoided && payment.voided_at && <small>Reversed {calendarDate(payment.voided_at)}</small>}</span><span><strong>{money(allocated, loan.currency || 'PHP')}</strong><small>{payment.allocations?.length || 0} installment allocation{payment.allocations?.length === 1 ? '' : 's'}</small></span><span className="amount"><strong>{money(payment.amount, loan.currency || 'PHP')}</strong><small>{isVoided ? 'Reversed' : 'Paid'}</small></span><span className="loan-paid-actions">{isVoided ? <small>Already voided</small> : <button type="button" onClick={() => { setVoidTarget(payment); setVoidReason(''); setVoidError(''); }}><RotateCcw size={13}/>Void</button>}</span></div>; })}</div>}
+      {!loading && !error && response?.last_page > 1 && <div className="loan-paid-pagination"><button type="button" className="secondary-button" disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button><span>Page {response.current_page} of {response.last_page}</span><button type="button" className="secondary-button" disabled={page >= response.last_page} onClick={() => setPage(value => value + 1)}>Next</button></div>}
+    </section>
+    {voidTarget && <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && closeVoid()}><form className="modal confirmation-modal loan-payment-void-modal" onSubmit={submitVoid}><div className="modal-head"><div><p className="eyebrow">VOID LOAN PAYMENT</p><h2>Reverse this loan payment?</h2></div><button type="button" className="icon-button" onClick={closeVoid} disabled={voiding}><X size={19}/></button></div><p className="modal-intro">The original payment remains in history. A reversing journal restores the funding-account balance and reopens the affected loan installment.</p><div className="payment-confirm-summary"><div><span>Loan</span><strong>{voidTarget.loan?.number}</strong></div><div><span>Party</span><strong>{partyName(voidTarget.loan)}</strong></div><div><span>Amount</span><strong>{money(voidTarget.amount, voidTarget.loan?.currency || 'PHP')}</strong></div><div><span>Paid from</span><strong>{voidTarget.financial_account?.name || 'Financial account'}</strong></div></div><label className="void-reason-field">Reason<textarea rows="3" maxLength="255" value={voidReason} onChange={event => setVoidReason(event.target.value)} placeholder="Example: Duplicate payment or wrong loan account" required/></label>{voidError && <div className="portal-login-error" role="alert"><CircleHelp size={16}/><span>{voidError}</span></div>}<div className="modal-actions"><button type="button" className="text-button" onClick={closeVoid} disabled={voiding}>Cancel</button><button type="submit" className="primary-button danger-button" disabled={voiding || !voidReason.trim()}>{voiding ? <><RefreshCw className="spin" size={15}/>Voiding…</> : <><RotateCcw size={15}/>Void payment</>}</button></div></form></div>}
+    {voidResult && <div className="modal-backdrop transfer-success-backdrop" role="dialog" aria-modal="true" aria-label="Loan payment voided"><div className="modal transfer-success-modal transfer-void-success"><div className="success-icon"><Check size={28}/></div><p className="eyebrow">LOAN PAYMENT VOIDED</p><h2>{money(voidResult.amount, voidResult.loan?.currency || 'PHP')}</h2><span className="transfer-success-number">{voidResult.loan?.number}</span><p>The reversal was posted, the funding-account balance was restored, and the loan due was recalculated.</p><button type="button" className="primary-button wide" onClick={() => setVoidResult(null)}>Done</button></div></div>}
+  </main>;
+}
+
 function LoansPage({ view = 'list', selectedLoanId, onSelectLoan, onBack, onAddLoan }) {
   if (selectedLoanId) return <LoanDetailPage loanId={selectedLoanId} onBack={onBack}/>;
   if (view === 'upcoming') return <LoanUpcomingDuesPage onSelectLoan={onSelectLoan} onAddLoan={onAddLoan}/>;
+  if (view === 'paid') return <LoanPaidPaymentsPage onSelectLoan={onSelectLoan}/>;
   return <LoanListPage onSelectLoan={onSelectLoan} createInitially={view === 'new'} onExitCreate={onBack}/>;
 }
 
@@ -3834,6 +4752,8 @@ function App() {
   const [active, setActive] = useState(() => pageFromPath(window.location.pathname));
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [chequeDepositOpen, setChequeDepositOpen] = useState(false);
+  const [chequeRefreshVersion, setChequeRefreshVersion] = useState(0);
   const navigate = (page, resourceId = null, options = {}) => {
     visitPath(pagePath(page, resourceId, options));
   };
@@ -3880,7 +4800,8 @@ function App() {
   const page = useMemo(() => {
     if (active === 'dashboard') return <Dashboard onNavigate={navigate}/>;
     if (active === 'cash-balance') return <CashBalancePage onOpenAccount={id => navigate('accounts', id)}/>;
-    if (active === 'collections') return <PaymentsPage title="Collections" direction="in"/>;
+    if (active === 'payables') return <PayablesPage/>;
+    if (active === 'collections') return <CollectionsPage/>;
     if (active === 'user-accounts') {
       const creatingAccount = currentPath === '/user-accounts/new';
       const editAccountId = currentPath.match(/^\/user-accounts\/([^/]+)\/edit$/)?.[1];
@@ -3931,10 +4852,14 @@ function App() {
     if (active === 'credit-cards') {
       const creatingCard = currentPath === '/credit-cards/new';
       const upcomingCards = currentPath === '/credit-cards/upcoming';
+      const paidCards = currentPath === '/credit-cards/paid';
       const adjustmentCardId = currentPath.match(/^\/credit-cards\/([^/]+)\/adjustments$/)?.[1];
-      const cardId = !creatingCard && !upcomingCards ? currentPath.match(/^\/credit-cards\/([^/]+)$/)?.[1] : null;
+      const cardId = !creatingCard && !upcomingCards && !paidCards ? currentPath.match(/^\/credit-cards\/([^/]+)$/)?.[1] : null;
       if (creatingCard) {
         return <CreditCardTransactionPage/>;
+      }
+      if (paidCards) {
+        return <CreditCardPaidTransactionsPage/>;
       }
       if (adjustmentCardId) {
         const decodedId = decodeURIComponent(adjustmentCardId);
@@ -3942,18 +4867,20 @@ function App() {
         return <CreditCardAdjustmentsPage cardId={decodedId} onBack={() => navigate('credit-cards', decodedId, { asOf })}/>;
       }
       return cardId
-        ? <CreditCardDetailPage cardId={decodeURIComponent(cardId)} onBack={() => navigate('credit-cards')} onAdjust={asOf => navigate('accounts', decodeURIComponent(cardId), { view: 'adjustments', asOf, from: 'credit-card' })}/>
+        ? <CreditCardAccountDetailPage cardId={decodeURIComponent(cardId)}/>
         : <CreditCardsPage view={upcomingCards ? 'upcoming' : 'list'}/>;
     }
     if (active === 'loans') {
-      const loanView = currentPath === '/loans/new' ? 'new' : currentPath === '/loans/upcoming' ? 'upcoming' : 'list';
+      const loanView = currentPath === '/loans/new' ? 'new' : currentPath === '/loans/upcoming' ? 'upcoming' : currentPath === '/loans/paid' ? 'paid' : 'list';
       const loanId = loanView === 'list' ? currentPath.match(/^\/loans\/([^/]+)$/)?.[1] : null;
       return <LoansPage view={loanView} selectedLoanId={loanId ? decodeURIComponent(loanId) : null} onSelectLoan={id => navigate('loans', id)} onBack={() => navigate('loans')} onAddLoan={() => navigate('loans', null, { view: 'new' })}/>;
     }
     if (active === 'cheques') {
       const bankAccountId = currentPath.match(/^\/cheques\/banks\/([^/]+)\/dues$/)?.[1];
-      const chequeView = currentPath === '/cheques/new' ? 'new' : bankAccountId ? 'bank-dues' : currentPath === '/cheques/due' ? 'due' : 'list';
-      return <ChequesWorkspace view={chequeView} bankAccountId={bankAccountId ? decodeURIComponent(bankAccountId) : null} onNavigate={(view, id = null) => navigate('cheques', id, { view })}/>;
+      const paidChequeId = currentPath.match(/^\/cheques\/paid\/([^/]+)$/)?.[1];
+      const checkingAccountId = currentPath.match(/^\/cheques\/checking-accounts\/([^/]+)$/)?.[1];
+      const chequeView = currentPath === '/cheques/new' ? 'new' : bankAccountId ? 'bank-dues' : currentPath === '/cheques/due' ? 'due' : paidChequeId ? 'paid-detail' : currentPath === '/cheques/paid' ? 'paid' : checkingAccountId ? 'checking-account-detail' : currentPath === '/cheques/checking-accounts' ? 'checking-accounts' : 'list';
+      return <ChequesWorkspace view={chequeView} bankAccountId={bankAccountId ? decodeURIComponent(bankAccountId) : null} chequeId={paidChequeId ? decodeURIComponent(paidChequeId) : null} checkingAccountId={checkingAccountId ? decodeURIComponent(checkingAccountId) : null} refreshVersion={chequeRefreshVersion} onNavigate={(view, id = null) => navigate('cheques', id, { view })}/>;
     }
     if (active === 'expenses') {
       const expenseView = currentPath.match(/^\/expenses\/([^/]+)$/)?.[1] || 'ledger';
@@ -3963,7 +4890,7 @@ function App() {
     if (active === 'reports') return <ReportsPage/>;
     if (active === 'interbranch') return <InterbranchPage/>;
     return <PlaceholderPage active={active}/>;
-  }, [active, currentPath, session]);
+  }, [active, currentPath, session, chequeRefreshVersion]);
   const changeAuthMode = nextMode => {
     const nextPath = nextMode === 'register' ? '/register' : '/login';
     visitPath(nextPath, { replace: true });
@@ -3978,7 +4905,7 @@ function App() {
   };
   if (!sessionReady) return <main className="login-page auth-session-loading" aria-label="Restoring accounting session"><RefreshCw className="spin" size={24}/><span>Restoring your session…</span></main>;
   if (!session) return <LoginPage mode={authMode} onModeChange={changeAuthMode} onAuthenticated={completeAuthentication}/>;
-  return <div className="app-shell"><Sidebar active={active} currentPath={currentPath} setActive={navigate} open={menuOpen} close={()=>setMenuOpen(false)} user={session} onLogout={logout}/><div className="main-shell"><Header active={active} onMenu={()=>setMenuOpen(true)} onNew={()=>setModalOpen(true)}/>{page}</div>{modalOpen && <NewTransactionModal close={()=>setModalOpen(false)}/>}</div>;
+  return <div className="app-shell"><Sidebar active={active} currentPath={currentPath} setActive={navigate} open={menuOpen} close={()=>setMenuOpen(false)} user={session} onLogout={logout}/><div className="main-shell"><Header active={active} onMenu={()=>setMenuOpen(true)} onNew={()=>setModalOpen(true)} onChequeDeposit={()=>setChequeDepositOpen(true)} isCheckingAccounts={currentPath === '/cheques/checking-accounts'}/>{page}</div>{modalOpen && <NewTransactionModal close={()=>setModalOpen(false)}/>} {chequeDepositOpen && <ChequeDepositDialog onClose={()=>setChequeDepositOpen(false)} onDeposited={()=>{ setChequeDepositOpen(false); setChequeRefreshVersion(value => value + 1); }}/>}</div>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

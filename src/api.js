@@ -59,6 +59,7 @@ export const bakingStoreApi = {
 };
 
 export const accountingApi = {
+  collections: (params = '') => request(`/collections${params}`),
   dashboardTotalCashBalance: (dayFrom, dayTo) => {
     const params = new URLSearchParams();
     if (dayFrom) params.set('day_from', dayFrom);
@@ -97,14 +98,19 @@ export const accountingApi = {
   },
   dashboardRecentActivity: (params = '') => request(`/dashboard/recent-activity${params}`),
   creditCards: (params = '') => request(`/credit-cards${params}`),
+  paidCreditCardTransactions: (params = '') => request(`/credit-cards/paid-transactions${params}`),
+  voidCreditCardPayment: (id, reason) => request(`/credit-cards/payments/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
   financialInstitutions: (params = '') => request(`/financial-institutions${params}`),
   creditCard: (id, params = '') => request(`/credit-cards/${id}${params}`),
   creditCardPaymentMethods: (id) => request(`/credit-cards/${id}/payment-methods`),
   creditCardFundingAccounts: (id, paymentMethodId, branchId) => {
     const params = new URLSearchParams({
       payment_method_id: String(paymentMethodId),
-      branch_id: String(branchId),
     });
+    if (branchId) params.set('branch_id', String(branchId));
     return request(`/credit-cards/${id}/funding-accounts?${params.toString()}`);
   },
   creditCardAdjustments: (id) => request(`/credit-cards/${id}/adjustments`),
@@ -118,6 +124,14 @@ export const accountingApi = {
     body: JSON.stringify({ reason }),
   }),
   createCreditCardPayment: (id, payload) => request(`/credit-cards/${id}/payments`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  settleCreditCardFromBalance: (id, payload) => request(`/credit-cards/${id}/settle-from-balance`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createCreditCardDeposit: (payload) => request('/credit-cards/deposits', {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
@@ -169,6 +183,26 @@ export const accountingApi = {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
+  createChartAccountGroup: (payload) => request('/chart-account-groups', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createExpenseType: (payload) => request('/expense-types', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createExpenseCategory: (payload) => request('/expense-categories', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createExpenseItem: (payload) => request('/expense-items', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
+  createExpense: (payload) => request('/expenses', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
   deleteChartAccount: (id) => request(`/chart-accounts/${id}`, { method: 'DELETE' }),
   chartAccountGroups: (params = '') => request(`/chart-account-groups/list${params}`),
   chartAccountList: (params = '') => request(`/chart-accounts/list${params}`),
@@ -185,15 +219,18 @@ export const accountingApi = {
     body: JSON.stringify({ reason, rejection_reason: reason }),
   }),
   counterparties: (params = '') => request(`/counterparties${params}`),
+  counterpartyList: (params = '') => request(`/counterparties/list${params}`),
   branches: (params = '') => request(`/branches${params}`),
+  branchList: (params = '') => request(`/branches/list${params}`),
   accountTransactions: (id, params = '') => request(`/financial-accounts/${id}/transactions${params}`),
   updatePaymentLineConfirmation: (id, confirmed) => request(`/integrations/customer-payment-lines/${id}/confirmation`, {
     method: 'PUT',
     body: JSON.stringify({ confirmed }),
   }),
-  accountMovements: (id) => request(`/financial-accounts/${id}/movements`),
+  accountMovements: (id, params = '') => request(`/financial-accounts/${id}/movements${params}`),
   payments: (type) => request(`/payments?type=${type}`),
-  obligations: () => request('/payment-obligations'),
+  paymentRecords: (params = '') => request(`/payments${params}`),
+  obligations: (params = '') => request(`/payment-obligations${params}`),
   journals: (params = '') => request(`/journal-entries${params}`),
   transfers: (params = '') => request(`/account-transfers${params}`),
   createTransfer: (payload) => request('/account-transfers', {
@@ -240,18 +277,31 @@ export const accountingApi = {
     return request(`/loans/${id}/payment-accounts?${params.toString()}`);
   },
   loanPayments: (id, params = '') => request(`/loans/${id}/payments${params}`),
+  paidLoanPayments: (params = '') => request(`/loan-payments${params}`),
   createLoanPayment: (id, payload) => request(`/loans/${id}/payments`, {
     method: 'POST',
     body: JSON.stringify(payload),
   }),
   deleteLoanPayment: (loanId, paymentId) => request(`/loans/${loanId}/payments/${paymentId}`, { method: 'DELETE' }),
+  voidLoanPayment: (loanId, paymentId, reason) => request(`/loans/${loanId}/payments/${paymentId}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
   cheques: (params = '') => request(`/cheques${params}`),
+  cheque: (id) => request(`/cheques/${id}`),
   chequeSummary: (params = '') => request(`/cheques/summary${params}`),
   chequeBanks: (params = '') => request(`/cheques/banks${params}`),
   chequeBankDues: (accountId, params = '') => request(`/cheques/banks/${accountId}/dues${params}`),
   createCheque: (payload) => request('/cheques', { method: 'POST', body: JSON.stringify(payload) }),
   deleteCheque: (id) => request(`/cheques/${id}`, { method: 'DELETE' }),
   markChequePaid: (id, payload) => request(`/cheques/${id}/mark-paid`, { method: 'POST', body: JSON.stringify(payload) }),
+  chequeSettlementOptions: (id) => request(`/cheques/${id}/settlement-options`),
+  settleCheque: (id, payload) => request(`/cheques/${id}/settle`, { method: 'POST', body: JSON.stringify(payload) }),
+  voidChequeSettlement: (id, reason) => request(`/cheques/${id}/void-settlement`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  depositChequeBalance: (payload) => request('/cheques/deposits', { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(payload) }),
+  chequeDepositOptions: () => request('/cheques/deposit-options'),
+  chequeCheckingAccounts: () => request('/cheques/checking-accounts'),
+  chequeCheckingAccount: (id) => request(`/cheques/checking-accounts/${id}`),
   interbranchOrders: (params = '') => request(`/interbranch-orders${params}`),
   createPayment: (payload) => request('/payments', {
     method: 'POST',

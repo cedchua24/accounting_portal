@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen, Check, ChevronDown, ChevronRight, CircleHelp, Eye, Landmark,
-  ReceiptText, RefreshCw, Search, Tag, X,
+  Plus, ReceiptText, RefreshCw, Search, Tag, X,
 } from 'lucide-react';
 import { accountingApi } from './api.js';
 import { AppLink, pagePath } from './navigation.jsx';
+import { financialAccountOptionLabel } from './financial-account-labels.js';
 
 const setupViews = [
   ['chart-accounts', 'Chart of Accounts', Landmark],
@@ -79,6 +80,40 @@ function field(record, ...keys) {
     if (value !== undefined && value !== null && value !== '') return value;
   }
   return '';
+}
+
+function displayText(value, fallback = '—') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (Array.isArray(value)) {
+    const values = value.map(item => displayText(item, '')).filter(Boolean);
+    return values.length ? values.join(', ') : fallback;
+  }
+  if (typeof value === 'object') {
+    for (const key of ['name', 'display_name', 'username', 'email', 'code', 'number', 'title', 'label']) {
+      if (value[key] !== undefined && value[key] !== null && value[key] !== '') return displayText(value[key], fallback);
+    }
+    return fallback;
+  }
+  return String(value);
+}
+
+const financialAccountGroupOrder = [
+  ['cash', 'Cash'],
+  ['bank', 'Online Transfer / Bank'],
+  ['cheque', 'Cheque / Checking'],
+  ['e_wallet', 'E-Wallet'],
+  ['credit_card', 'Credit Card'],
+  ['other', 'Other accounts'],
+];
+
+function financialAccountGroup(record) {
+  const kind = slug(field(record, 'kind', 'account_kind', 'account_type', 'type'));
+  if (kind === 'cash') return 'cash';
+  if (kind === 'bank-account' || kind === 'bank') return 'bank';
+  if (kind === 'checking-account' || kind === 'checking' || kind === 'cheque') return 'cheque';
+  if (kind === 'e-wallet' || kind === 'wallet') return 'e_wallet';
+  if (kind === 'credit-card') return 'credit_card';
+  return 'other';
 }
 
 function relatedText(record, directKeys, nestedKeys) {
@@ -182,8 +217,8 @@ function ExpenseChip({ children, tone = 'neutral' }) {
 }
 
 function groupId(record) { return field(record, 'id', 'chart_account_group_id', 'group_id'); }
-function groupName(record) { return field(record, 'chart_account_group_name', 'group_name', 'name', 'title') || 'Ungrouped accounts'; }
-function groupCode(record) { return field(record, 'chart_account_group_code', 'group_code', 'code'); }
+function groupName(record) { return field(record, 'source_name', 'chart_account_group_name', 'group_name', 'name', 'title') || 'Ungrouped accounts'; }
+function groupCode(record) { return field(record, 'source_code', 'chart_account_group_code', 'group_code', 'code'); }
 function accountGroupId(record) { return field(record, 'chart_account_group_id', 'group_id', 'account_group_id'); }
 function nestedAccounts(record) { return recordsFrom(record, ['chart_accounts', 'accounts', 'children']); }
 
@@ -198,6 +233,7 @@ function normalizeAccountGroups(treePayload, groupRecords, accountRecords) {
       id,
       code: groupCode(group),
       name: groupName(group),
+      internalCode: field(group, 'internal_code', 'code'),
       status: recordStatus(group),
       accounts: accounts.length ? accounts : flatAccounts.filter(account => String(accountGroupId(account)) === String(id)),
     };
@@ -208,6 +244,65 @@ function normalizeAccountGroups(treePayload, groupRecords, accountRecords) {
   return groups;
 }
 
+function expenseRequestError(error, fallback) {
+  const first = error?.details && Object.values(error.details).flat()[0];
+  return first || error?.message || fallback;
+}
+
+function ChartAccountCreateDialog({ groups, onClose, onCreated }) {
+  const accounts = groups.flatMap(group => group.accounts.map(account => ({ ...account, expenseGroupId: group.id })));
+  const [form, setForm] = useState({ code: '', name: '', type: 'expense', group_id: '', parent_id: '', description: '', is_postable: true, is_active: true });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const parents = accounts.filter(account => String(field(account, 'type')) === form.type && (!form.group_id || String(accountGroupId(account)) === String(form.group_id)));
+  const update = event => { const { name, value, type, checked } = event.target; setForm(current => ({ ...current, [name]: type === 'checkbox' ? checked : value, ...(name === 'type' || name === 'group_id' ? { parent_id: '' } : {}) })); setError(''); };
+  const submit = async event => {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      const created = await accountingApi.createChartAccount({ ...form, group_id: form.group_id ? Number(form.group_id) : null, parent_id: form.parent_id ? Number(form.parent_id) : null });
+      onCreated(created?.data || created);
+    } catch (requestError) { setError(expenseRequestError(requestError, 'The chart account could not be created.')); }
+    finally { setSaving(false); }
+  };
+  return <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && !saving && onClose()}><form className="modal expense-create-modal" onSubmit={submit}><div className="modal-head"><div><p className="eyebrow">CHART OF ACCOUNTS</p><h2>Add chart account</h2><p>Create a postable ledger account for expense classification.</p></div><button type="button" className="icon-button" onClick={onClose} disabled={saving}><X size={18}/></button></div>{error && <div className="expense-inline-error"><CircleHelp size={15}/>{error}</div>}<div className="expense-create-grid"><label>Account code <b>*</b><input name="code" value={form.code} onChange={update} maxLength="30" placeholder="e.g. 6100" required/></label><label>Account name <b>*</b><input name="name" value={form.name} onChange={update} placeholder="e.g. Operating expenses" required/></label><label>Account type <b>*</b><select name="type" value={form.type} onChange={update} required>{['asset','liability','equity','revenue','expense'].map(type => <option key={type} value={type}>{humanizeExpense(type)}</option>)}</select></label><label>Account group<select name="group_id" value={form.group_id} onChange={update}><option value="">No group</option>{groups.filter(group => group.id !== 'ungrouped').map(group => <option key={group.id} value={group.id}>{group.code ? `${group.code} · ` : ''}{group.name}</option>)}</select></label><label>Parent account<select name="parent_id" value={form.parent_id} onChange={update}><option value="">No parent account</option>{parents.map(account => <option key={expenseId(account)} value={expenseId(account)}>{field(account, 'code')} · {field(account, 'name')}</option>)}</select></label><label className="span-2">Description<textarea name="description" value={form.description} onChange={update} rows="3" placeholder="Purpose of this ledger account"/></label><label className="expense-check"><input name="is_postable" type="checkbox" checked={form.is_postable} onChange={update}/> Allow journal posting</label><label className="expense-check"><input name="is_active" type="checkbox" checked={form.is_active} onChange={update}/> Active</label></div><div className="modal-actions"><button type="button" className="text-button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? <><RefreshCw className="spin" size={14}/>Creating…</> : <><Plus size={14}/>Create account</>}</button></div></form></div>;
+}
+
+function ChartAccountGroupCreateDialog({ onClose, onCreated }) {
+  const [form, setForm] = useState({ code: '', name: '', normal_balance: 'debit', is_active: true });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const update = event => { const { name, value, type, checked } = event.target; setForm(current => ({ ...current, [name]: type === 'checkbox' ? checked : value })); setError(''); };
+  const submit = async event => {
+    event.preventDefault(); setSaving(true); setError('');
+    try { const created = await accountingApi.createChartAccountGroup(form); onCreated(created?.data || created); }
+    catch (requestError) { setError(expenseRequestError(requestError, 'The chart-account group could not be created.')); }
+    finally { setSaving(false); }
+  };
+  return <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && !saving && onClose()}><form className="modal expense-create-modal compact" onSubmit={submit}><div className="modal-head"><div><p className="eyebrow">CHART OF ACCOUNTS</p><h2>Add account group</h2><p>Create a top-level accounting classification.</p></div><button type="button" className="icon-button" onClick={onClose} disabled={saving}><X size={18}/></button></div>{error && <div className="expense-inline-error"><CircleHelp size={15}/>{error}</div>}<div className="expense-create-grid"><label>Group code <b>*</b><input name="code" value={form.code} onChange={update} maxLength="30" required/></label><label>Group name <b>*</b><input name="name" value={form.name} onChange={update} required/></label><label>Normal balance <b>*</b><select name="normal_balance" value={form.normal_balance} onChange={update}><option value="debit">Debit</option><option value="credit">Credit</option></select></label><label className="expense-check"><input name="is_active" type="checkbox" checked={form.is_active} onChange={update}/> Active</label></div><div className="modal-actions"><button type="button" className="text-button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? <><RefreshCw className="spin" size={14}/>Creating…</> : <><Plus size={14}/>Create group</>}</button></div></form></div>;
+}
+
+function ExpenseMasterCreateDialog({ view, records, onClose, onCreated }) {
+  const config = masterConfig[view];
+  const [form, setForm] = useState({ code: '', name: '', expense_type_id: '', expense_category_id: '', chart_account_id: '', description: '', details: '', is_active: true, is_hidden: false });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const categories = records.categories.filter(category => !form.expense_type_id || String(field(category, 'expense_type_id')) === String(form.expense_type_id));
+  const expenseAccounts = records.accounts.filter(account => field(account, 'type') === 'expense' && field(account, 'is_active', 'active') !== false && field(account, 'is_postable', 'postable') !== false);
+  const update = event => { const { name, value, type, checked } = event.target; setForm(current => ({ ...current, [name]: type === 'checkbox' ? checked : value, ...(name === 'expense_type_id' ? { expense_category_id: '' } : {}) })); setError(''); };
+  const submit = async event => {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      let created;
+      if (view === 'types') created = await accountingApi.createExpenseType({ code: form.code, name: form.name, chart_account_id: form.chart_account_id ? Number(form.chart_account_id) : null, is_active: form.is_active });
+      else if (view === 'categories') created = await accountingApi.createExpenseCategory({ expense_type_id: Number(form.expense_type_id), chart_account_id: form.chart_account_id ? Number(form.chart_account_id) : null, code: form.code, name: form.name, description: form.description || null, is_active: form.is_active });
+      else created = await accountingApi.createExpenseItem({ expense_category_id: Number(form.expense_category_id), chart_account_id: Number(form.chart_account_id), code: form.code, name: form.name, details: form.details || null, is_hidden: form.is_hidden, is_active: form.is_active });
+      onCreated(created?.data || created);
+    } catch (requestError) { setError(expenseRequestError(requestError, `The expense ${config.noun} could not be created.`)); }
+    finally { setSaving(false); }
+  };
+  return <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && !saving && onClose()}><form className="modal expense-create-modal" onSubmit={submit}><div className="modal-head"><div><p className="eyebrow">EXPENSE SETUP</p><h2>Add expense {config.noun}</h2><p>Configure the hierarchy and ledger classification used during expense entry.</p></div><button type="button" className="icon-button" onClick={onClose} disabled={saving}><X size={18}/></button></div>{error && <div className="expense-inline-error"><CircleHelp size={15}/>{error}</div>}<div className="expense-create-grid">{view !== 'types' && <label>Expense type <b>*</b><select name="expense_type_id" value={form.expense_type_id} onChange={update} required><option value="">Select expense type</option>{records.types.map(type => <option key={typeId(type)} value={typeId(type)}>{typeCode(type, true)} · {typeName(type, true)}</option>)}</select></label>}{view === 'items' && <label>Expense category <b>*</b><select name="expense_category_id" value={form.expense_category_id} onChange={update} disabled={!form.expense_type_id} required><option value="">Select expense category</option>{categories.map(category => <option key={categoryId(category)} value={categoryId(category)}>{categoryCode(category, true)} · {categoryName(category, true)}</option>)}</select></label>}<label>Code <b>*</b><input name="code" value={form.code} onChange={update} maxLength="30" placeholder="Unique code" required/></label><label>Name <b>*</b><input name="name" value={form.name} onChange={update} placeholder={`Expense ${config.noun} name`} required/></label><label className={view === 'types' ? 'span-2' : ''}>Chart account {view === 'items' && <b>*</b>}<select name="chart_account_id" value={form.chart_account_id} onChange={update} required={view === 'items'}><option value="">{view === 'items' ? 'Select postable expense account' : 'Use child classification'}</option>{expenseAccounts.map(account => <option key={accountId(account)} value={accountId(account)}>{accountCode(account, true)} · {accountName(account, true)}</option>)}</select></label>{view === 'categories' && <label className="span-2">Description<textarea name="description" value={form.description} onChange={update} rows="3"/></label>}{view === 'items' && <label className="span-2">Details<textarea name="details" value={form.details} onChange={update} rows="3"/></label>}<label className="expense-check"><input name="is_active" type="checkbox" checked={form.is_active} onChange={update}/> Active</label>{view === 'items' && <label className="expense-check"><input name="is_hidden" type="checkbox" checked={form.is_hidden} onChange={update}/> Hide from manual entry</label>}</div><div className="modal-actions"><button type="button" className="text-button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? <><RefreshCw className="spin" size={14}/>Creating…</> : <><Plus size={14}/>Create {config.noun}</>}</button></div></form></div>;
+}
+
 function ChartAccountsPage({ onNavigate }) {
   const [groups, setGroups] = useState([]);
   const [expanded, setExpanded] = useState(new Set());
@@ -216,6 +311,8 @@ function ChartAccountsPage({ onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   useEffect(() => {
     let current = true;
     setLoading(true); setError('');
@@ -232,7 +329,7 @@ function ChartAccountsPage({ onNavigate }) {
         accountResult.status === 'fulfilled' ? accountResult.value : [],
       );
       setGroups(next);
-      setExpanded(new Set(next.map(group => String(group.id))));
+      setExpanded(new Set());
     }).catch(requestError => current && setError(requestError.message || 'Chart accounts could not be loaded.'))
       .finally(() => current && setLoading(false));
     return () => { current = false; };
@@ -243,7 +340,7 @@ function ChartAccountsPage({ onNavigate }) {
       ...group,
       accounts: group.accounts.filter(account => {
         const text = [field(account, 'chart_account_code', 'account_code', 'code'), field(account, 'chart_account_name', 'account_name', 'name'), field(account, 'account_type', 'type'), field(account, 'account_nature', 'normal_balance')].join(' ').toLowerCase();
-        const matchesQuery = !term || `${group.code} ${group.name}`.toLowerCase().includes(term) || text.includes(term);
+        const matchesQuery = !term || `${group.code} ${group.internalCode || ''} ${group.name}`.toLowerCase().includes(term) || text.includes(term);
         return matchesQuery && (status === 'all' || recordStatus(account).toLowerCase() === status);
       }),
     })).filter(group => group.accounts.length || (!term && status === 'all'));
@@ -251,7 +348,7 @@ function ChartAccountsPage({ onNavigate }) {
   const totalAccounts = groups.reduce((sum, group) => sum + group.accounts.length, 0);
   const expenseAccounts = groups.reduce((sum, group) => sum + group.accounts.filter(account => /expense/i.test(String(field(account, 'account_type', 'type', 'chart_account_name', 'name')))).length, 0);
   const toggle = id => setExpanded(current => { const next = new Set(current); const key = String(id); if (next.has(key)) next.delete(key); else next.add(key); return next; });
-  return <main className="content inner-page expense-page"><ExpenseSectionNav active="chart-accounts" onNavigate={onNavigate}/><div className="title-row"><div><p className="eyebrow">EXPENSE SETUP</p><h1>Chart of Accounts</h1><p>Review the account groups that classify manual and system-generated expenses.</p></div><button type="button" className="secondary-button" onClick={() => setVersion(value => value + 1)}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div><section className="summary-strip expense-summary"><div><span>Account groups</span><strong>{groups.length}</strong></div><div><span>Chart accounts</span><strong>{totalAccounts}</strong></div><div><span>Expense accounts</span><strong>{expenseAccounts}</strong></div></section><section className="panel expense-panel"><div className="expense-panel-head"><div><h2>Account hierarchy</h2><p>Expand a group to inspect its linked chart accounts.</p></div><div className="expense-toolbar"><label className="small-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search account or code"/></label><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="hidden">Hidden</option></select></div></div><ExpenseState loading={loading} error={error} retry={() => setVersion(value => value + 1)} empty={!visible.length} icon={Landmark} emptyTitle="No chart accounts found" emptyCopy="Change the search or status filter and try again."/>{!loading && !error && visible.length > 0 && <div className="expense-table-wrap"><table className="expense-table account-tree-table"><thead><tr><th>Code</th><th>Account / group</th><th>Type</th><th>Normal balance</th><th>Linked items</th><th>Status</th></tr></thead><tbody>{visible.map(group => { const open = expanded.has(String(group.id)) || Boolean(query.trim()); return <React.Fragment key={group.id}><tr className="expense-group-row"><td>{group.code || '—'}</td><td colSpan="4"><button type="button" onClick={() => toggle(group.id)} aria-expanded={open}>{open ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}<strong>{group.name}</strong><small>{group.accounts.length} account{group.accounts.length === 1 ? '' : 's'}</small></button></td><td><ExpenseChip tone={slug(group.status)}>{group.status}</ExpenseChip></td></tr>{open && group.accounts.map((account, index) => { const accountStatus = recordStatus(account); return <tr key={expenseId(account) || `${group.id}-${index}`}><td><code>{field(account, 'chart_account_code', 'account_code', 'code') || '—'}</code></td><td><strong>{field(account, 'chart_account_name', 'account_name', 'name') || 'Unnamed account'}</strong></td><td>{field(account, 'account_type', 'type', 'classification') || '—'}</td><td>{field(account, 'account_nature', 'normal_balance', 'nature') || '—'}</td><td>{field(account, 'expense_items_count', 'items_count', 'linked_items_count') || 0}</td><td><ExpenseChip tone={slug(accountStatus)}>{accountStatus}</ExpenseChip></td></tr>; })}</React.Fragment>; })}</tbody></table></div>}</section></main>;
+  return <main className="content inner-page expense-page"><ExpenseSectionNav active="chart-accounts" onNavigate={onNavigate}/><div className="title-row"><div><p className="eyebrow">EXPENSE SETUP</p><h1>Chart of Accounts</h1><p>Review the account groups that classify manual and system-generated expenses.</p></div><div className="expense-title-actions"><button type="button" className="secondary-button" onClick={() => setVersion(value => value + 1)}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button><button type="button" className="secondary-button" onClick={() => setCreateGroupOpen(true)}><Plus size={16}/>Add group</button><button type="button" className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={16}/>Add account</button></div></div><section className="summary-strip expense-summary"><div><span>Account groups</span><strong>{groups.length}</strong></div><div><span>Chart accounts</span><strong>{totalAccounts}</strong></div><div><span>Expense accounts</span><strong>{expenseAccounts}</strong></div></section><section className="panel expense-panel"><div className="expense-panel-head"><div><h2>Account hierarchy</h2><p>Expand a group to inspect its linked chart accounts.</p></div><div className="expense-toolbar"><label className="small-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search account or code"/></label><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="hidden">Hidden</option></select></div></div><ExpenseState loading={loading} error={error} retry={() => setVersion(value => value + 1)} empty={!visible.length} icon={Landmark} emptyTitle="No chart accounts found" emptyCopy="Change the search or status filter and try again."/>{!loading && !error && visible.length > 0 && <div className="expense-table-wrap"><table className="expense-table account-tree-table"><thead><tr><th>Code</th><th>Account / group</th><th>Type</th><th>Normal balance</th><th>Linked items</th><th>Status</th></tr></thead><tbody>{visible.map(group => { const open = expanded.has(String(group.id)) || Boolean(query.trim()); return <React.Fragment key={group.id}><tr className="expense-group-row"><td>{group.code || '—'}</td><td colSpan="4"><button type="button" onClick={() => toggle(group.id)} aria-expanded={open}>{open ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}<strong>{group.name}</strong><small>{group.accounts.length} account{group.accounts.length === 1 ? '' : 's'}</small></button></td><td><ExpenseChip tone={slug(group.status)}>{group.status}</ExpenseChip></td></tr>{open && group.accounts.map((account, index) => { const accountStatus = recordStatus(account); return <tr key={expenseId(account) || `${group.id}-${index}`}><td><code>{field(account, 'chart_account_code', 'account_code', 'code') || '—'}</code></td><td><strong>{field(account, 'chart_account_name', 'account_name', 'name') || 'Unnamed account'}</strong></td><td>{field(account, 'account_type', 'type', 'classification') || '—'}</td><td>{field(account, 'account_nature', 'normal_balance', 'nature') || '—'}</td><td>{field(account, 'expense_items_count', 'items_count', 'linked_items_count') || 0}</td><td><ExpenseChip tone={slug(accountStatus)}>{accountStatus}</ExpenseChip></td></tr>; })}</React.Fragment>; })}</tbody></table></div>}</section>{createOpen && <ChartAccountCreateDialog groups={groups} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); setVersion(value => value + 1); }}/>} {createGroupOpen && <ChartAccountGroupCreateDialog onClose={() => setCreateGroupOpen(false)} onCreated={() => { setCreateGroupOpen(false); setVersion(value => value + 1); }}/>}</main>;
 }
 
 function typeId(record) { return field(record, 'expense_type_id', 'type_id', 'id'); }
@@ -284,6 +381,7 @@ function ExpenseMasterPage({ view, onNavigate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
   useEffect(() => {
     let current = true;
     setLoading(true); setError('');
@@ -328,11 +426,11 @@ function ExpenseMasterPage({ view, onNavigate }) {
   const hidden = visible.filter(row => hiddenRecord(row.raw)).length;
   const system = visible.filter(row => row.system).length;
   const codeParts = row => <code className="expense-code">{[row.accountCode, row.typeCode, row.categoryCode, row.code].filter(Boolean).join('.') || '—'}</code>;
-  return <main className="content inner-page expense-page"><ExpenseSectionNav active={view} onNavigate={onNavigate}/><div className="title-row"><div><p className="eyebrow">EXPENSE SETUP</p><h1>{config.title}</h1><p>{config.copy}</p></div><button type="button" className="secondary-button" onClick={() => setVersion(value => value + 1)}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button></div><section className="summary-strip expense-summary"><div><span>Visible results</span><strong>{visible.length}</strong></div><div><span>Hidden</span><strong>{hidden}</strong></div><div><span>{view === 'items' ? 'System items' : `Configured ${config.noun}s`}</span><strong>{view === 'items' ? system : rows.length}</strong></div></section><section className="panel expense-panel"><div className="expense-panel-head"><div><h2>{config.title} directory</h2><p>Read-only setup supplied by the accounting API.</p></div><div className="expense-toolbar master-toolbar">{view !== 'types' && <select value={selectedType} onChange={event => { setSelectedType(event.target.value); setSelectedCategory(''); }}><option value="">All expense types</option>{records.types.map(record => <option key={typeId(record)} value={typeId(record)}>{typeName(record, true)}</option>)}</select>}{view === 'items' && <select value={selectedCategory} onChange={event => setSelectedCategory(event.target.value)}><option value="">All categories</option>{availableCategories.map(record => <option key={categoryId(record)} value={categoryId(record)}>{categoryName(record, true)}</option>)}</select>}{view === 'items' && <select value={selectedSource} onChange={event => setSelectedSource(event.target.value)}><option value="all">All sources</option><option value="manual">Manual</option><option value="system">System</option></select>}<select value={selectedStatus} onChange={event => setSelectedStatus(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="hidden">Hidden</option></select><label className="small-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${config.noun}s`}/></label></div></div><ExpenseState loading={loading} error={error} retry={() => setVersion(value => value + 1)} empty={!visible.length} icon={config.Icon} emptyTitle={`No ${config.noun}s found`} emptyCopy="Change the filters or search term and try again."/>{!loading && !error && visible.length > 0 && <div className="expense-table-wrap"><table className={`expense-table expense-master-table ${view}`}>
+  return <main className="content inner-page expense-page"><ExpenseSectionNav active={view} onNavigate={onNavigate}/><div className="title-row"><div><p className="eyebrow">EXPENSE SETUP</p><h1>{config.title}</h1><p>{config.copy}</p></div><div className="expense-title-actions"><button type="button" className="secondary-button" onClick={() => setVersion(value => value + 1)}><RefreshCw className={loading ? 'spin' : ''} size={16}/>Refresh</button><button type="button" className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={16}/>Add {config.noun}</button></div></div><section className="summary-strip expense-summary"><div><span>Visible results</span><strong>{visible.length}</strong></div><div><span>Hidden</span><strong>{hidden}</strong></div><div><span>{view === 'items' ? 'System items' : `Configured ${config.noun}s`}</span><strong>{view === 'items' ? system : rows.length}</strong></div></section><section className="panel expense-panel"><div className="expense-panel-head"><div><h2>{config.title} directory</h2><p>Create and manage the hierarchy supplied by the accounting API.</p></div><div className="expense-toolbar master-toolbar">{view !== 'types' && <select value={selectedType} onChange={event => { setSelectedType(event.target.value); setSelectedCategory(''); }}><option value="">All expense types</option>{records.types.map(record => <option key={typeId(record)} value={typeId(record)}>{typeName(record, true)}</option>)}</select>}{view === 'items' && <select value={selectedCategory} onChange={event => setSelectedCategory(event.target.value)}><option value="">All categories</option>{availableCategories.map(record => <option key={categoryId(record)} value={categoryId(record)}>{categoryName(record, true)}</option>)}</select>}{view === 'items' && <select value={selectedSource} onChange={event => setSelectedSource(event.target.value)}><option value="all">All sources</option><option value="manual">Manual</option><option value="system">System</option></select>}<select value={selectedStatus} onChange={event => setSelectedStatus(event.target.value)}><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="hidden">Hidden</option></select><label className="small-search"><Search size={15}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${config.noun}s`}/></label></div></div><ExpenseState loading={loading} error={error} retry={() => setVersion(value => value + 1)} empty={!visible.length} icon={config.Icon} emptyTitle={`No ${config.noun}s found`} emptyCopy="Change the filters or search term and try again."/>{!loading && !error && visible.length > 0 && <div className="expense-table-wrap"><table className={`expense-table expense-master-table ${view}`}>
     {view === 'types' && <><thead><tr><th>Code</th><th>Expense type</th><th>Chart account</th><th>Description</th><th>Categories</th><th>Status</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td>{codeParts(row)}</td><td><strong>{row.name}</strong></td><td>{row.accountCode ? <code>{row.accountCode}</code> : null} {row.accountName || '—'}</td><td className="expense-description">{row.description || '—'}</td><td>{row.count}</td><td><ExpenseChip tone={slug(row.status)}>{row.status}</ExpenseChip></td></tr>)}</tbody></>}
     {view === 'categories' && <><thead><tr><th>Code</th><th>Expense type</th><th>Category</th><th>Description</th><th>Items</th><th>Status</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td>{codeParts(row)}</td><td>{row.typeName}</td><td><strong>{row.name}</strong></td><td className="expense-description">{row.description || '—'}</td><td>{row.count}</td><td><ExpenseChip tone={slug(row.status)}>{row.status}</ExpenseChip></td></tr>)}</tbody></>}
     {view === 'items' && <><thead><tr><th>Full code</th><th>Expense item</th><th>Expense type</th><th>Category</th><th>Chart account</th><th>Source</th><th>Status</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td>{codeParts(row)}</td><td><strong>{row.name}</strong>{row.description && <small>{row.description}</small>}</td><td>{row.typeName}</td><td>{row.categoryName}</td><td>{row.accountCode && <code>{row.accountCode}</code>} {row.accountName}</td><td><ExpenseChip tone={row.system ? 'system' : 'manual'}>{row.system ? 'System' : 'Manual'}</ExpenseChip></td><td><ExpenseChip tone={slug(row.status)}>{row.status}</ExpenseChip></td></tr>)}</tbody></>}
-  </table></div>}</section></main>;
+  </table></div>}</section>{createOpen && <ExpenseMasterCreateDialog view={view} records={records} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); setVersion(value => value + 1); }}/>}</main>;
 }
 
 function approvalLabel(record, system) {
@@ -361,10 +459,61 @@ function userCanApproveExpenses(user) {
   return roles.some(role => /^(super[ _-]?admin|admin|owner|finance[ _-]?manager|accounting[ _-]?manager|expense[ _-]?approver)$/i.test(role));
 }
 
+function newExpenseNumber() {
+  const now = new Date();
+  return `EXP-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+}
+
+function ExpenseTransactionCreateDialog({ setup, onClose, onCreated }) {
+  const today = isoExpenseDay(new Date());
+  const [form, setForm] = useState({ number: newExpenseNumber(), branch_id: '', payee_id: '', expense_type_id: '', expense_category_id: '', expense_item_id: '', expense_date: today, currency: 'PHP', amount: '', reference: '', description: '', approval_status: 'pending', is_received: false, received_date: '' });
+  const [branches, setBranches] = useState([]);
+  const [payees, setPayees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let current = true;
+    Promise.all([accountingApi.branchList('?active=1'), accountingApi.counterpartyList('?active=1')])
+      .then(([branchResponse, payeeResponse]) => {
+        if (!current) return;
+        const branchRecords = recordsFrom(branchResponse, ['branches']);
+        const payeeRecords = recordsFrom(payeeResponse, ['counterparties']);
+        setBranches(branchRecords);
+        setPayees(payeeRecords);
+        setForm(value => ({ ...value, branch_id: value.branch_id || (branchRecords[0] ? String(branchRecords[0].id) : '') }));
+      })
+      .catch(requestError => current && setError(expenseRequestError(requestError, 'Expense options could not be loaded.')))
+      .finally(() => current && setLoading(false));
+    return () => { current = false; };
+  }, []);
+  const categories = setup.categories.filter(category => !form.expense_type_id || String(field(category, 'expense_type_id')) === String(form.expense_type_id));
+  const items = setup.items.filter(item => (!form.expense_category_id || String(field(item, 'expense_category_id')) === String(form.expense_category_id)) && field(item, 'is_active', 'active') !== false && !hiddenRecord(item));
+  const selectedItem = setup.items.find(item => String(itemId(item)) === String(form.expense_item_id));
+  const selectedAccount = setup.accounts.find(account => String(accountId(account)) === String(field(selectedItem, 'chart_account_id')));
+  const update = event => {
+    const { name, value, type, checked } = event.target;
+    setForm(current => ({ ...current, [name]: type === 'checkbox' ? checked : value, ...(name === 'expense_type_id' ? { expense_category_id: '', expense_item_id: '' } : {}), ...(name === 'expense_category_id' ? { expense_item_id: '' } : {}), ...(name === 'is_received' && !checked ? { received_date: '' } : {}) }));
+    setError('');
+  };
+  const submit = async event => {
+    event.preventDefault(); setSaving(true); setError('');
+    try {
+      const created = await accountingApi.createExpense({ number: form.number.trim(), branch_id: Number(form.branch_id), payee_id: form.payee_id ? Number(form.payee_id) : null, expense_item_id: Number(form.expense_item_id), expense_date: form.expense_date, currency: form.currency.toUpperCase(), amount: Number(form.amount), reference: form.reference.trim() || null, description: form.description.trim(), approval_status: form.approval_status, is_received: form.is_received, received_date: form.is_received && form.received_date ? form.received_date : null });
+      onCreated(created?.data || created);
+    } catch (requestError) { setError(expenseRequestError(requestError, 'The expense transaction could not be created.')); }
+    finally { setSaving(false); }
+  };
+  return <div className="modal-backdrop" onMouseDown={event => event.target === event.currentTarget && !saving && onClose()}><form className="modal expense-create-modal expense-transaction-create" onSubmit={submit}><div className="modal-head"><div><p className="eyebrow">EXPENSE TRANSACTION</p><h2>Create expense</h2><p>Selecting an expense automatically assigns its configured chart account.</p></div><button type="button" className="icon-button" onClick={onClose} disabled={saving}><X size={18}/></button></div>{error && <div className="expense-inline-error"><CircleHelp size={15}/>{error}</div>}{loading ? <div className="expense-state"><RefreshCw className="spin" size={20}/><strong>Loading expense options…</strong></div> : <div className="expense-create-grid"><label>Expense number <b>*</b><input name="number" value={form.number} onChange={update} maxLength="50" required/></label><label>Expense date <b>*</b><input name="expense_date" type="date" value={form.expense_date} onChange={update} required/></label><label>Expense type <b>*</b><select name="expense_type_id" value={form.expense_type_id} onChange={update} required><option value="">Select type</option>{setup.types.map(type => <option key={typeId(type)} value={typeId(type)}>{typeCode(type, true)} · {typeName(type, true)}</option>)}</select></label><label>Expense category <b>*</b><select name="expense_category_id" value={form.expense_category_id} onChange={update} disabled={!form.expense_type_id} required><option value="">Select category</option>{categories.map(category => <option key={categoryId(category)} value={categoryId(category)}>{categoryCode(category, true)} · {categoryName(category, true)}</option>)}</select></label><label>Expense <b>*</b><select name="expense_item_id" value={form.expense_item_id} onChange={update} disabled={!form.expense_category_id} required><option value="">Select expense</option>{items.map(item => <option key={itemId(item)} value={itemId(item)}>{itemCode(item)} · {itemName(item)}</option>)}</select></label><label>Chart account<input value={selectedAccount ? `${accountCode(selectedAccount, true)} · ${accountName(selectedAccount, true)}` : 'Assigned by expense selection'} readOnly/></label><label>Branch <b>*</b><select name="branch_id" value={form.branch_id} onChange={update} required><option value="">Select branch</option>{branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label><label>Payee<select name="payee_id" value={form.payee_id} onChange={update}><option value="">No payee</option>{payees.map(payee => <option key={payee.id} value={payee.id}>{payee.name}</option>)}</select></label><label>Amount <b>*</b><input name="amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={update} placeholder="0.00" required/></label><label>Currency <b>*</b><input name="currency" value={form.currency} onChange={update} maxLength="3" required/></label><label>Approval status<select name="approval_status" value={form.approval_status} onChange={update}><option value="pending">Pending approval</option><option value="draft">Draft</option><option value="approved">Approved</option></select></label><label>Reference<input name="reference" value={form.reference} onChange={update} maxLength="100" placeholder="Receipt or invoice reference"/></label><label className="span-2">Description <b>*</b><textarea name="description" value={form.description} onChange={update} rows="3" placeholder="Business purpose and supporting details" required/></label><label className="expense-check"><input name="is_received" type="checkbox" checked={form.is_received} onChange={update}/> Supporting document received</label>{form.is_received && <label>Received date<input name="received_date" type="date" value={form.received_date} onChange={update} required/></label>}</div>}<div className="modal-actions"><button type="button" className="text-button" onClick={onClose} disabled={saving}>Cancel</button><button className="primary-button" disabled={saving || loading}>{saving ? <><RefreshCw className="spin" size={14}/>Creating…</> : <><Plus size={14}/>Create expense</>}</button></div></form></div>;
+}
+
 function LedgerPage({ approvalOnly, onNavigate, user }) {
+  const requestedExpenseId = new URLSearchParams(window.location.search).get('expense_id');
+  const requestedSearch = new URLSearchParams(window.location.search).get('search') || '';
   const [records, setRecords] = useState([]);
-  const [setup, setSetup] = useState({ types: [], categories: [], items: [], accounts: [] });
-  const [filters, setFilters] = useState({ query: '', from: '', to: '', type: '', category: '', item: '', account: '', source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all', received: 'all' });
+  const [setup, setSetup] = useState({ types: [], categories: [], items: [], accounts: [], financialAccounts: [] });
+  const [filters, setFilters] = useState({ query: requestedSearch, from: '', to: '', type: '', category: '', item: '', account: '', financialAccount: '', source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all', received: 'all' });
+  const [appliedFilters, setAppliedFilters] = useState({ query: requestedSearch, from: '', to: '', type: '', category: '', item: '', account: '', financialAccount: '', source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all', received: 'all' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -374,9 +523,11 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
   const [reason, setReason] = useState('');
   const [decisionError, setDecisionError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const sessionCanApprove = useMemo(() => userCanApproveExpenses(user), [user]);
   useEffect(() => {
     setFilters(current => ({ ...current, source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all' }));
+    setAppliedFilters(current => ({ ...current, source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all' }));
   }, [approvalOnly]);
   useEffect(() => {
     let current = true;
@@ -392,7 +543,8 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
       loadAll(accountingApi.expenseCategories, ['expense_categories', 'categories']),
       loadAll(accountingApi.expenseItems, ['expense_items', 'items', 'expenses']),
       loadAll(accountingApi.chartAccountList, ['chart_accounts', 'accounts']),
-    ]).then(([ledgerResult, setupResult, typeResult, categoryResult, itemResult, accountResult]) => {
+      loadAll(query => accountingApi.financialAccounts(query), ['financial_accounts', 'accounts'], { perPage: 100 }),
+    ]).then(([ledgerResult, setupResult, typeResult, categoryResult, itemResult, accountResult, financialAccountResult]) => {
       if (!current) return;
       if (ledgerResult.status === 'rejected') throw ledgerResult.reason;
       const hierarchy = setupResult.status === 'fulfilled' ? setupHierarchy(setupResult.value) : { types: [], categories: [], items: [] };
@@ -402,6 +554,7 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
         categories: categoryResult.status === 'fulfilled' && categoryResult.value.length ? categoryResult.value : hierarchy.categories,
         items: itemResult.status === 'fulfilled' && itemResult.value.length ? itemResult.value : hierarchy.items,
         accounts: accountResult.status === 'fulfilled' ? accountResult.value : [],
+        financialAccounts: financialAccountResult.status === 'fulfilled' ? financialAccountResult.value : [],
       });
     }).catch(requestError => current && setError(requestError.message || 'The expense ledger could not be loaded.'))
       .finally(() => current && setLoading(false));
@@ -411,6 +564,11 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
   const categoryMap = useMemo(() => new Map(setup.categories.map(record => [String(categoryId(record)), record])), [setup.categories]);
   const itemMap = useMemo(() => new Map(setup.items.map(record => [String(itemId(record)), record])), [setup.items]);
   const accountMap = useMemo(() => new Map(setup.accounts.map(record => [String(accountId(record)), record])), [setup.accounts]);
+  const groupedFinancialAccounts = useMemo(() => financialAccountGroupOrder.map(([key, label]) => ({
+    key,
+    label,
+    accounts: setup.financialAccounts.filter(record => financialAccountGroup(record) === key),
+  })).filter(group => group.accounts.length), [setup.financialAccounts]);
   const rows = useMemo(() => records.map((record, index) => {
     const system = systemRecord(record);
     const linkedItemId = field(record, 'expense_item_id', 'item_id', 'expense_v2_id'); const linkedItem = itemMap.get(String(linkedItemId));
@@ -420,24 +578,50 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
     const permission = field(record, 'can_approve', 'can_decide', 'is_approver');
     return {
       raw: record, key: `${system ? 'system' : 'manual'}-${expenseId(record) || field(record, 'source_id', 'reference') || index}-${index}`, id: expenseId(record),
-      date: field(record, 'expense_date', 'transaction_date', 'posted_at', 'date', 'created_at'), reference: field(record, 'reference', 'reference_no', 'reference_number', 'transaction_reference', 'source_reference') || '—',
+      date: field(record, 'expense_date', 'transaction_date', 'posted_at', 'date', 'created_at'), reference: displayText(field(record, 'reference', 'reference_no', 'reference_number', 'transaction_reference', 'source_reference')),
       itemId: linkedItemId, itemName: relatedText(record, ['expense_item_name', 'expense_name', 'item_name', 'expense_item'], ['name', 'expense_name']) || itemName(linkedItem) || 'Unclassified expense',
       typeId: linkedTypeId, typeName: typeName(record) || typeName(linkedType, true) || '—', categoryId: linkedCategoryId, categoryName: categoryName(record) || categoryName(linkedCategory, true) || '—',
       accountId: linkedAccountId, accountName: accountName(record) || accountName(linkedAccount, true) || '—', accountCode: accountCode(record) || accountCode(linkedAccount, true),
       system, source: system ? 'System' : 'Manual', amount: Number(String(field(record, 'amount', 'expense_amount', 'total_amount', 'interest_amount') || 0).replaceAll(',', '')) || 0, currency: field(record, 'currency', 'currency_code') || 'PHP',
-      approval: approvalLabel(record, system), received: receivedLabel(record), createdBy: field(record, 'creator_name', 'created_by_name', 'requestor_name', 'user_name', 'created_by') || '—', decidedBy: field(record, 'approver_name', 'approved_by_name', 'rejected_by_name', 'decided_by_name') || '—',
-      payee: field(record, 'payee', 'payee_name', 'vendor', 'source_entity_name') || '—', notes: field(record, 'notes', 'details', 'description', 'remarks') || '—', rejectionReason: field(record, 'rejection_reason', 'reject_reason', 'reason') || '—', canDecide: permission === '' ? sessionCanApprove : truthy(permission),
+      approval: approvalLabel(record, system), received: receivedLabel(record), createdBy: displayText(field(record, 'creator_name', 'created_by_name', 'requestor_name', 'user_name', 'created_by', 'creator')), decidedBy: displayText(field(record, 'approver_name', 'approved_by_name', 'rejected_by_name', 'decided_by_name', 'approved_by', 'approver')),
+      payee: displayText(field(record, 'payee_name', 'payee', 'vendor', 'source_entity_name')), notes: displayText(field(record, 'notes', 'details', 'description', 'remarks')), rejectionReason: displayText(field(record, 'rejection_reason', 'reject_reason', 'reason')), canDecide: permission === '' ? sessionCanApprove : truthy(permission),
+      creditCardId: record.financial_account_id || record.credit_card?.id,
+      creditCardName: record.credit_card?.name || '',
+      statementId: record.payment_obligation_id || record.statement?.id,
+      statementNumber: record.statement?.number || '',
+      adjustmentId: record.financial_account_adjustment_id || record.adjustment?.id,
+      adjustmentNumber: record.adjustment?.number || '',
+      chequeId: record.cheque_id || record.cheque?.id,
+      chequeNumber: record.cheque?.cheque_number || '',
+      chequeSettlementId: record.cheque_settlement_id || record.cheque_settlement?.id,
+      financialAccountId: record.financial_account_id || record.financial_account?.id || record.credit_card?.id || '',
+      financialAccountName: displayText(record.financial_account || record.credit_card, '—'),
+      financialInstitutionName: displayText(record.financial_account?.institution || record.credit_card?.institution, ''),
     };
   }), [records, itemMap, categoryMap, typeMap, accountMap, sessionCanApprove]);
-  const availableCategories = setup.categories.filter(record => !filters.type || String(field(record, 'expense_type_id', 'type_id')) === String(filters.type));
-  const availableItems = setup.items.filter(record => { const category = categoryMap.get(String(field(record, 'expense_category_id', 'category_id'))); const linkedTypeId = field(record, 'expense_type_id', 'type_id') || field(category, 'expense_type_id', 'type_id'); return (!filters.type || String(linkedTypeId) === String(filters.type)) && (!filters.category || String(field(record, 'expense_category_id', 'category_id')) === String(filters.category)); });
+  const availableCategories = filters.type
+    ? setup.categories.filter(record => String(field(record, 'expense_type_id', 'type_id')) === String(filters.type))
+    : [];
+  const availableItems = filters.type
+    ? setup.items.filter(record => {
+      const category = categoryMap.get(String(field(record, 'expense_category_id', 'category_id')));
+      const linkedTypeId = field(record, 'expense_type_id', 'type_id') || field(category, 'expense_type_id', 'type_id');
+      return String(linkedTypeId) === String(filters.type)
+        && (!filters.category || String(field(record, 'expense_category_id', 'category_id')) === String(filters.category));
+    })
+    : [];
   const visible = useMemo(() => {
-    const term = filters.query.trim().toLowerCase();
+    const term = appliedFilters.query.trim().toLowerCase();
     return rows.filter(row => {
-      const text = [row.reference, row.itemName, row.typeName, row.categoryName, row.accountName, row.accountCode, row.createdBy, row.decidedBy, row.payee, row.notes].join(' ').toLowerCase(); const day = isoExpenseDay(row.date);
-      return (!term || text.includes(term)) && (!filters.from || day >= filters.from) && (!filters.to || day <= filters.to) && (!filters.type || String(row.typeId) === String(filters.type)) && (!filters.category || String(row.categoryId) === String(filters.category)) && (!filters.item || String(row.itemId) === String(filters.item)) && (!filters.account || String(row.accountId) === String(filters.account)) && (filters.source === 'all' || row.source.toLowerCase() === filters.source) && (filters.approval === 'all' || row.approval.toLowerCase() === filters.approval) && (filters.received === 'all' || slug(row.received) === filters.received);
+      const text = [row.reference, row.itemName, row.typeName, row.categoryName, row.accountName, row.accountCode, row.financialAccountName, row.financialInstitutionName, row.createdBy, row.decidedBy, row.payee, row.notes].join(' ').toLowerCase(); const day = isoExpenseDay(row.date);
+      return (!term || text.includes(term)) && (!appliedFilters.from || day >= appliedFilters.from) && (!appliedFilters.to || day <= appliedFilters.to) && (!appliedFilters.type || String(row.typeId) === String(appliedFilters.type)) && (!appliedFilters.category || String(row.categoryId) === String(appliedFilters.category)) && (!appliedFilters.item || String(row.itemId) === String(appliedFilters.item)) && (!appliedFilters.account || String(row.accountId) === String(appliedFilters.account)) && (!appliedFilters.financialAccount || String(row.financialAccountId) === String(appliedFilters.financialAccount)) && (appliedFilters.source === 'all' || row.source.toLowerCase() === appliedFilters.source) && (appliedFilters.approval === 'all' || row.approval.toLowerCase() === appliedFilters.approval) && (appliedFilters.received === 'all' || slug(row.received) === appliedFilters.received);
     });
-  }, [rows, filters]);
+  }, [rows, appliedFilters]);
+  useEffect(() => {
+    if (!requestedExpenseId || details || rows.length === 0) return;
+    const requested = rows.find(row => String(row.id) === String(requestedExpenseId));
+    if (requested) setDetails(requested);
+  }, [requestedExpenseId, rows, details]);
   const pending = rows.filter(row => !row.system && row.approval === 'Pending').length;
   const systemCount = visible.filter(row => row.system).length;
   const totals = visible.reduce((byCurrency, row) => {
@@ -447,7 +631,12 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
   }, new Map());
   const totalLabel = [...totals.entries()].map(([currency, amount]) => moneyExpense(amount, currency)).join(' + ') || moneyExpense(0);
   const updateFilter = event => { const { name, value } = event.target; setFilters(current => ({ ...current, [name]: value, ...(name === 'type' ? { category: '', item: '' } : {}), ...(name === 'category' ? { item: '' } : {}) })); };
-  const clearFilters = () => setFilters({ query: '', from: '', to: '', type: '', category: '', item: '', account: '', source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all', received: 'all' });
+  const submitFilters = event => { event.preventDefault(); setAppliedFilters({ ...filters }); };
+  const clearFilters = () => {
+    const cleared = { query: '', from: '', to: '', type: '', category: '', item: '', account: '', financialAccount: '', source: approvalOnly ? 'manual' : 'all', approval: approvalOnly ? 'pending' : 'all', received: 'all' };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+  };
   const isPending = row => !row.system && row.approval === 'Pending' && row.canDecide;
   const decide = (row, action) => { setDetails(null); setDecision({ row, action }); setReason(''); setDecisionError(''); };
   const submitDecision = async () => {
@@ -480,6 +669,7 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <p>{approvalOnly ? 'Review manual expense requests without changing system-generated entries.' : 'Manual expenses and automatic bank, credit-card, and borrowed-loan interest in one ledger.'}</p>
 </div>
 <div className="expense-title-actions">
+{!approvalOnly && <button type="button" className="primary-button" onClick={() => setCreateOpen(true)}><Plus size={15}/>Create expense</button>}
 <AppLink href={pagePath('expenses', null, { view: 'ledger' })} className={!approvalOnly ? 'expense-view-button active' : 'expense-view-button'}>Ledger</AppLink>
 <AppLink href={pagePath('expenses', null, { view: 'approvals' })} className={approvalOnly ? 'expense-view-button active' : 'expense-view-button'}>Pending approvals{pending > 0 && <em>{pending}</em>}</AppLink>
 <button type="button" className="icon-button" onClick={() => setVersion(value => value + 1)} aria-label="Refresh expenses">
@@ -514,7 +704,7 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 </div>
 <button type="button" className="link-button" onClick={clearFilters}>Clear filters</button>
 </div>
-<div className="expense-filter-grid">
+<form className="expense-filter-grid" onSubmit={submitFilters}>
 <label>Search<span>
 <Search size={14}/>
 <input name="query" value={filters.query} onChange={updateFilter} placeholder="Reference, payee, account…"/>
@@ -535,6 +725,9 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 </label>
 <label>Chart account<select name="account" value={filters.account} onChange={updateFilter}>
 <option value="">All accounts</option>{setup.accounts.map(record => <option key={accountId(record)} value={accountId(record)}>{accountCode(record, true)} · {accountName(record, true)}</option>)}</select>
+</label>
+<label>Financial account<select name="financialAccount" value={filters.financialAccount} onChange={updateFilter}>
+<option value="">All financial accounts</option>{groupedFinancialAccounts.map(group => <optgroup key={group.key} label={group.label}>{group.accounts.map(record => <option key={record.id} value={record.id}>{financialAccountOptionLabel(record)}</option>)}</optgroup>)}</select>
 </label>
 <label>Source<select name="source" value={filters.source} onChange={updateFilter}>
 <option value="all">All sources</option>
@@ -557,7 +750,8 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <option value="not-specified">Not specified</option>
 </select>
 </label>
-</div>
+<div className="expense-filter-actions"><button type="submit" className="primary-button"><Search size={14}/>Submit</button></div>
+</form>
 </section>
 <section className="panel expense-panel expense-ledger-panel">
 <div className="expense-panel-head">
@@ -656,6 +850,10 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <strong>{details.accountCode ? `${details.accountCode} · ` : ''}{details.accountName}</strong>
 </div>
 <div>
+<span>Financial account</span>
+<strong>{details.financialAccountName}{details.financialInstitutionName ? ` · ${details.financialInstitutionName}` : ''}</strong>
+</div>
+<div>
 <span>Received</span>
 <strong>{details.received}</strong>
 </div>
@@ -675,6 +873,26 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <span>Rejection reason</span>
 <strong>{details.rejectionReason}</strong>
 </div>
+{details.creditCardId && <div>
+<span>Credit card</span>
+<strong>{details.creditCardName || `Card #${details.creditCardId}`}</strong>
+</div>}
+{details.statementId && <div>
+<span>Card statement</span>
+<strong>{details.statementNumber || `Statement #${details.statementId}`}</strong>
+</div>}
+{details.adjustmentId && <div>
+<span>Linked adjustment</span>
+<strong>{details.adjustmentNumber || `Adjustment #${details.adjustmentId}`}</strong>
+</div>}
+{details.chequeId && <div>
+<span>Linked cheque</span>
+<strong>{details.chequeNumber || `Cheque #${details.chequeId}`}</strong>
+</div>}
+{details.chequeSettlementId && <div>
+<span>Cheque settlement</span>
+<strong>Settlement #{details.chequeSettlementId}</strong>
+</div>}
 <div className="wide">
 <span>Notes</span>
 <strong>{details.notes}</strong>
@@ -705,7 +923,7 @@ function LedgerPage({ approvalOnly, onNavigate, user }) {
 <RefreshCw className="spin" size={14}/>Saving…</> : decision.action === 'approve' ? 'Approve expense' : 'Reject expense'}</button>
 </div>
 </div>
-</div>}</main>;
+</div>}{createOpen && <ExpenseTransactionCreateDialog setup={setup} onClose={() => setCreateOpen(false)} onCreated={() => { setCreateOpen(false); setNotice('Expense transaction created successfully.'); setVersion(value => value + 1); }}/>}</main>;
 }
 
 export default function ExpensesWorkspace({ view = 'ledger', onNavigate, user }) {

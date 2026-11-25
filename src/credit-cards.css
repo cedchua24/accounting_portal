@@ -1,15 +1,124 @@
 /* Compact credit card list */
 .credit-cards-page { max-width: 1500px; }
 .credit-title-row { margin-bottom: 18px; }
-.credit-summary { display: grid; grid-template-columns: repeat(4,1fr); margin-bottom: 16px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 13px; }
-.credit-summary > div { padding: 18px 20px; border-right: 1px solid var(--line); }
-.credit-summary > div:last-child { border: 0; }
+.credit-title-actions { display: flex; align-items: center; gap: 10px; }
+.card-deposit-button { color: #2f6d53; border-color: #bdd2c4; background: #fff; }
+.card-specific-payment-retired { display: none !important; }
+.card-detail-page .statement-history-panel { grid-row: 1; }
+.card-deposit-dialog { width: min(860px,100%); max-height: calc(100vh - 40px); overflow-y: auto; }
+.card-deposit-dialog .modal-head p:last-child { margin: 6px 0 0; color: #7b8981; font-size: 10px; }
+.card-deposit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; padding: 22px 24px; }
+.card-deposit-fields label { display: grid; gap: 7px; color: #52645a; font-size: 10px; font-weight: 800; }
+.card-deposit-fields label b { color: #a73e48; }
+.card-deposit-fields label > small { color: #89958e; font-size: 8px; font-weight: 500; }
+.card-deposit-fields .span-2 { grid-column: 1/-1; }
+.card-deposit-fields input,.card-deposit-fields select { width: 100%; height: 46px; padding: 0 12px; border: 1px solid #d7e1da; border-radius: 9px; color: #304238; background: #fff; font-size: 11px; outline: none; }
+.card-deposit-fields input:focus,.card-deposit-fields select:focus { border-color: #508269; box-shadow: 0 0 0 3px rgba(47,109,83,.09); }
+.card-deposit-fields select:disabled { color: #8a9690; background: #f2f5f3; }
+.credit-card-search-select { align-content: start; }
+.credit-card-combobox { position: relative; width: 100%; }
+.credit-card-combobox > svg { position: absolute; z-index: 1; top: 50%; left: 12px; color: #7f8d85; transform: translateY(-50%); pointer-events: none; }
+.credit-card-combobox > input { width: 100%; padding-right: 38px !important; padding-left: 36px !important; }
+.credit-card-combobox > .credit-card-combobox-chevron { right: 12px; left: auto; transition: transform .15s ease; }
+.credit-card-combobox.open > .credit-card-combobox-chevron { transform: translateY(-50%) rotate(180deg); }
+.credit-card-combobox.locked > input { color: #263d31; background: #f1f6f3; cursor: default; font-weight: 700; }
+.credit-card-combobox.locked > .credit-card-combobox-chevron { display: none; }
+.credit-card-search-select .locked-card-note { color: #397257; font-weight: 700; }
+.credit-card-combobox-menu { position: absolute; z-index: 80; top: calc(100% + 5px); right: 0; left: 0; max-height: 310px; overflow-y: auto; border: 1px solid #d2ddd6; border-radius: 9px; background: #fff; box-shadow: 0 16px 38px rgba(22,50,36,.18); }
+.credit-card-combobox-menu button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; border: 0; border-bottom: 1px solid #edf0ee; color: #304238; background: #fff; text-align: left; cursor: pointer; }
+.credit-card-combobox-menu button:last-child { border-bottom: 0; }
+.credit-card-combobox-menu button:hover,.credit-card-combobox-menu button.selected { background: #edf6f0; }
+.credit-card-combobox-menu button > span { min-width: 0; }
+.credit-card-combobox-menu strong,.credit-card-combobox-menu small,.credit-card-combobox-menu em { display: block; }
+.credit-card-combobox-menu strong { overflow: hidden; color: #26392f; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.credit-card-combobox-menu small { margin-top: 4px; color: #839087; font-size: 8px; font-weight: 500; }
+.credit-card-combobox-menu em { flex: 0 0 auto; color: #2f7354; font-size: 10px; font-style: normal; font-weight: 800; text-align: right; }
+.credit-card-combobox-menu em small { margin-top: 2px; color: #839087; font-size: 7px; }
+.credit-card-combobox-empty { padding: 22px 14px; color: #7f8c85; text-align: center; font-size: 9px; }
+.credit-card-option-search { position: relative; }
+.credit-card-option-search svg { position: absolute; z-index: 1; top: 50%; left: 12px; color: #7f8d85; transform: translateY(-50%); pointer-events: none; }
+.credit-card-option-search input { padding-left: 36px !important; }
+.card-deposit-destination { display: flex; align-items: center; gap: 14px; padding: 15px 17px; border: 1px solid #d8e5dc; border-radius: 11px; background: #f3f8f5; }
+.card-deposit-destination > .card-deposit-card-icon { display: grid; flex: 0 0 auto; width: 43px; height: 43px; place-items: center; border-radius: 10px; color: #2f6d53; background: #e2efe6; }
+.card-deposit-balance-summary { min-width: 0; flex: 1; }
+.card-deposit-balance-summary > p { margin: 0 0 11px; color: #586b60; font-size: 10px; font-weight: 800; }
+.card-deposit-balance-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0; }
+.card-deposit-balance-grid > span { display: block; min-width: 0; padding: 0 15px; border-left: 1px solid #d6e2da; }
+.card-deposit-balance-grid > span:first-child { padding-left: 0; border-left: 0; }
+.card-deposit-balance-grid small,.card-deposit-balance-grid strong,.card-deposit-balance-grid em { display: block; margin: 0; }
+.card-deposit-balance-grid small { color: #74837b; font-size: 8px; font-weight: 900; letter-spacing: .35px; }
+.card-deposit-balance-grid strong { margin-top: 4px; color: #263d31; font: 800 16px 'Manrope'; white-space: nowrap; }
+.card-deposit-balance-grid em { margin-top: 3px; overflow: hidden; color: #829087; font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.card-deposit-balance-grid .current-balance strong { color: #a54a43; }
+.card-deposit-balance-grid .deposit-balance strong { color: #315e83; }
+.card-deposit-balance-grid .available-credit strong { color: #2f7455; }
+.card-deposit-error { margin: 18px 24px 0; }
+.card-deposit-note { display: flex; align-items: flex-start; gap: 9px; margin: 0 24px 20px; padding: 12px 14px; border: 1px solid #d8e7dd; border-radius: 9px; color: #406451; background: #f2f8f4; font-size: 10px; line-height: 1.5; }
+.card-deposit-note svg { flex: 0 0 auto; }
+@media (max-width: 650px) { .credit-title-actions { width: 100%; align-items: stretch; flex-direction: column; } .card-deposit-fields { grid-template-columns: 1fr; padding: 18px; } .card-deposit-fields .span-2 { grid-column: auto; } .card-deposit-note { margin-right: 18px; margin-left: 18px; } .card-deposit-destination { align-items: flex-start; } .card-deposit-balance-grid { grid-template-columns: 1fr; gap: 10px; } .card-deposit-balance-grid > span,.card-deposit-balance-grid > span:first-child { padding: 0 0 10px; border-bottom: 1px solid #d6e2da; border-left: 0; } .card-deposit-balance-grid > span:last-child { padding-bottom: 0; border-bottom: 0; } }
+
+/* Posted credit-card balance deposits. */
+.credit-paid-page { max-width: 1500px; }
+.credit-paid-summary { display: grid; grid-template-columns: 1.5fr 1fr; gap: 13px; margin-bottom: 18px; }
+.credit-paid-summary article { min-height: 112px; padding: 19px 21px; border: 1px solid var(--line); border-top: 3px solid #468065; border-radius: 13px; background: #fff; }
+.credit-paid-summary span,.credit-paid-summary strong,.credit-paid-summary small { display: block; }
+.credit-paid-summary span { color: #718078; font-size: 9px; font-weight: 800; letter-spacing: .35px; text-transform: uppercase; }
+.credit-paid-summary strong { margin: 11px 0 5px; color: #26392f; font: 800 23px 'Manrope'; }
+.credit-paid-summary small { color: #849087; font-size: 9px; }
+.credit-paid-panel { overflow: hidden; }
+.credit-paid-card-search { position: relative; padding: 15px 17px 0; background: #fafbf9; }
+.credit-paid-card-search svg { position: absolute; top: 27px; left: 29px; color: #849087; }
+.credit-paid-card-search input { width: min(520px,100%); height: 39px; padding: 0 12px 0 36px; border: 1px solid var(--line); border-radius: 8px; color: #34463c; background: #fff; font-size: 9px; outline: none; }
+.credit-paid-card-search input:focus { border-color: #5c8b72; box-shadow: 0 0 0 3px rgba(47,109,83,.08); }
+.credit-paid-filters { display: flex; align-items: end; gap: 9px; padding: 15px 17px; border-bottom: 1px solid var(--line); background: #fafbf9; }
+.credit-paid-filters label { display: grid; min-width: 135px; gap: 6px; color: #68776f; font-size: 8px; font-weight: 800; }
+.credit-paid-filters .credit-paid-card-filter { min-width: 300px; }
+.credit-paid-filters select,.credit-paid-filters input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; color: #34463c; background: #fff; font-size: 9px; outline: none; }
+.credit-paid-filters select:focus,.credit-paid-filters input:focus { border-color: #5c8b72; box-shadow: 0 0 0 3px rgba(47,109,83,.08); }
+.credit-paid-search { flex: 1; min-width: 230px !important; }
+.credit-paid-search > div { position: relative; }
+.credit-paid-search svg { position: absolute; top: 11px; left: 10px; color: #849087; }
+.credit-paid-search input { padding-left: 32px; }
+.credit-filter-reset { flex: 0 0 auto; height: 38px; }
+.credit-paid-table { overflow-x: auto; }
+.credit-paid-row { display: grid; width: 100%; grid-template-columns: minmax(0,1.28fr) minmax(0,.92fr) minmax(0,1fr) minmax(0,.58fr) minmax(0,.82fr) minmax(0,.78fr) minmax(0,1.3fr) minmax(92px,.68fr) minmax(72px,.5fr); align-items: center; gap: 12px; padding: 16px 16px; border-bottom: 1px solid #e8ede9; color: #34463c; background: #fff; }
+.credit-paid-row:last-child { border-bottom: 0; }
+.credit-paid-row.head { padding-top: 11px; padding-bottom: 11px; color: #7c8982; background: #f7f9f7; font-size: 8px; font-weight: 800; letter-spacing: .45px; text-transform: uppercase; }
+.credit-paid-row > span { min-width: 0; }
+.credit-paid-row strong,.credit-paid-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.credit-paid-row strong { color: #26392f; font-size: 10px; }
+.credit-paid-row small { margin-top: 4px; color: #849087; font-size: 8px; }
+.credit-paid-row .amount { text-align: right; }
+.credit-paid-row .amount strong { color: #2f7857; font: 800 12px 'Manrope'; }
+.credit-paid-row.voided-card-payment { background: #fbf8f8; }
+.credit-paid-row.voided-card-payment strong { color: #7a6969; }
+.credit-paid-row.voided-card-payment .amount strong { color: #9c5a5a; text-decoration: line-through; }
+.credit-paid-status { width: fit-content; padding: 3px 7px; border-radius: 999px; font-weight: 800; text-transform: uppercase; }
+.credit-paid-status.posted { color: #2d7653; background: #eaf5ee; }
+.credit-paid-status.voided { color: #a14444; background: #faeaea; }
+.credit-paid-actions { display: flex; justify-content: flex-end; }
+.credit-paid-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 64px; padding: 7px 8px; border: 1px solid #e5baba; border-radius: 7px; color: #a43e3e; background: #fff6f6; font-size: 9px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.credit-paid-actions button:hover { border-color: #ce7777; background: #ffeded; }
+.credit-payment-void-modal { max-width: 560px; }
+.credit-paid-expense.has-expense { padding: 8px 10px; border: 1px solid #efd7a8; border-radius: 8px; background: #fff9ee; }
+.credit-paid-expense.has-expense strong { color: #9a5b12; }
+.credit-paid-expense.has-expense small:last-child { color: #6f665b; }
+.credit-paid-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); color: #738078; background: #fafbf9; font-size: 9px; }
+@media (max-width: 1250px) { .credit-paid-row { min-width: 1180px; } }
+@media (max-width: 1050px) { .credit-paid-filters { flex-wrap: wrap; } .credit-paid-filters label { flex: 1 1 180px; } .credit-paid-search { flex-basis: 100%; } }
+@media (max-width: 600px) { .credit-paid-summary { grid-template-columns: 1fr; } .credit-paid-filters label { flex-basis: 100%; } .credit-filter-reset { width: 100%; justify-content: center; } }
+.credit-summary { display: grid; grid-template-columns: repeat(3,1fr); margin-bottom: 16px; overflow: hidden; background: #fff; border: 1px solid var(--line); border-radius: 13px; }
+.credit-summary > div { padding: 18px 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.credit-summary > div:nth-child(3n) { border-right: 0; }
+.credit-summary > div:nth-last-child(-n+2) { border-bottom: 0; }
 .credit-summary span, .credit-summary strong, .credit-summary small { display: block; }
 .credit-summary span { color: #7f8c84; font-size: 10px; }
 .credit-summary strong { margin: 6px 0; color: #1c3026; font: 700 18px 'Manrope'; }
 .credit-summary small { color: #8e9992; font-size: 9px; }
 .credit-summary .summary-urgent { background: #fff8f4; }
 .credit-summary .summary-urgent strong { color: #a94a43; }
+.credit-summary .summary-deposit { background: #f4faf6; }
+.credit-summary .summary-deposit strong { color: #286b4c; }
 .credit-list-panel { overflow: hidden; }
 .credit-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .credit-list-toolbar > div:first-child strong, .credit-list-toolbar > div:first-child small { display: block; }
@@ -24,14 +133,14 @@
 .credit-list-filters select:focus, .credit-as-of:focus-within { border-color: #5d8b73; box-shadow: 0 0 0 3px rgba(47,109,83,.08); outline: 0; }
 .credit-list-filters .icon-button:disabled { cursor: wait; opacity: .65; }
 .credit-list { overflow-x: auto; }
-.credit-list-row { display: grid; grid-template-columns: 250px 160px 150px 140px 180px 150px 105px 18px; align-items: center; gap: 10px; width: 100%; min-width: 1250px; padding: 18px 14px; color: #2d4036; background: #fff; border-bottom: 1px solid #e9ede9; font-size: 11px; }
+.credit-list-row { display: grid; grid-template-columns: 225px 145px 130px 120px 130px 165px 140px 100px 130px 18px; align-items: center; gap: 10px; width: 100%; min-width: 1510px; padding: 18px 14px; color: #2d4036; background: #fff; border-bottom: 1px solid #e9ede9; font-size: 11px; }
 .credit-list-row:last-child { border-bottom: 0; }
 .credit-list-row > span:not(:first-child) { position: relative; }
 .credit-list-row > span:not(:first-child)::before { position: absolute; top: 50%; left: -6px; width: 1px; height: 46px; background: #edf0ed; content: ''; transform: translateY(-50%); }
 .credit-list-head { padding-top: 11px; padding-bottom: 11px; color: #829087; background: #fafbf9; font-size: 8.5px; font-weight: 800; letter-spacing: .55px; text-transform: uppercase; }
 .credit-list-head > span:not(:first-child)::before { height: 18px; background: #e6ebe7; }
-.credit-list-head > span:nth-child(3), .credit-list-head > span:nth-child(4), .credit-list-head > span:nth-child(6) { text-align: right; }
-.credit-list-head > span:nth-child(7) { text-align: center; }
+.credit-list-head > span:nth-child(3), .credit-list-head > span:nth-child(4), .credit-list-head > span:nth-child(5), .credit-list-head > span:nth-child(7) { text-align: right; }
+.credit-list-head > span:nth-child(8) { text-align: center; }
 .credit-list-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .credit-list-identity > i { display: grid; flex: 0 0 auto; width: 38px; height: 38px; place-items: center; color: #dbe9ad; background: #173b2f; border-radius: 11px; }
 .credit-list-identity > span, .credit-list-holder { min-width: 0; }
@@ -41,6 +150,7 @@
 .credit-list-money { display: flex; min-width: 0; flex-direction: column; align-items: flex-end; text-align: right; }
 .credit-list-money strong { font: 700 12.5px 'Manrope'; }
 .credit-list-money.due strong { color: #2f6d53; }
+.credit-list-money.deposit-balance strong { color: #28704f; }
 .credit-list-money.available strong { padding: 5px 8px; color: #225f45; background: #edf6f0; border-radius: 8px; font-weight: 800; }
 .credit-list-payable { padding: 7px 8px; border-left: 3px solid transparent; border-radius: 8px; }
 .credit-list-payable strong { font-size: 12px; }
@@ -50,6 +160,12 @@
 .credit-list-payable.due_soon { background: #fff7ea; border-left-color: #d28a2f; }
 .credit-list-payable.due_soon strong { color: #8a5a1e; }
 .credit-list-status { display: flex; justify-content: center; }
+.credit-list-settle-action { display: flex; justify-content: flex-end; }
+.card-pay-due-button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border: 1px solid #d4ded8; border-radius: 8px; color: #637168; background: #f5f7f5; font-size: 8px; font-weight: 800; line-height: 1.2; text-align: center; cursor: pointer; }
+.card-pay-due-button.ready { border-color: #a9bec9; color: #355f73; background: #edf4f7; }
+.card-pay-due-button.needs-deposit { border-color: #e7cfaa; color: #8b5b20; background: #fff7e9; }
+.card-pay-due-button.disabled { cursor: default; opacity: .65; }
+.card-pay-due-button:focus-visible { outline: 3px solid rgba(53,95,115,.2); outline-offset: 2px; }
 .due-status { display: inline-flex; align-items: center; width: max-content; padding: 6px 9px; color: #557065; background: #edf2ee; border-radius: 20px; font-size: 8px; font-style: normal; font-weight: 800; letter-spacing: .5px; white-space: nowrap; text-transform: uppercase; }
 .due-status.overdue, .due-status.due_today, .due-status.due_urgent { color: #a7434b; background: #fae9eb; }
 .due-status.due_soon { color: #9f6724; background: #fbf0df; }
@@ -64,11 +180,48 @@
 .credit-list-state > span { max-width: 480px; }
 .credit-list-state .secondary-button { margin-top: 5px; }
 .history-status.open { color: #9e6827; background: #fbf0df; }
+.credit-balance-settlement-modal { width: min(650px,100%); }
+.credit-balance-settlement-modal .modal-head p:last-child { max-width: 520px; margin: 6px 0 0; color: #74837b; font-size: 10px; line-height: 1.5; }
+.credit-settlement-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 22px 24px; overflow: hidden; border: 1px solid var(--line); border-radius: 11px; background: var(--line); }
+.credit-settlement-summary > span { display: grid; gap: 6px; padding: 15px; color: #738078; background: #fff; font-size: 9px; }
+.credit-settlement-summary strong { color: #26392f; font: 800 14px 'Manrope'; }
+.credit-settlement-summary strong.red { color: #c53c48; }
+.credit-settlement-expense { display: grid; gap: 12px; margin: 0 24px 20px; }
+.settlement-expense-toggle { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid #d8e2dc; border-radius: 11px; background: #f7faf8; cursor: pointer; }
+.settlement-expense-toggle input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: #2d7458; }
+.settlement-expense-toggle span { display: grid; gap: 3px; }
+.settlement-expense-toggle strong { color: #26392f; font-size: 11px; }
+.settlement-expense-toggle small { color: #74837b; font-size: 9px; line-height: 1.45; }
+.settlement-expense-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 15px; border: 1px solid #d8e2dc; border-radius: 11px; }
+.settlement-expense-fields label { display: grid; gap: 7px; color: #607168; font-size: 9px; font-weight: 700; }
+.settlement-expense-fields input,.settlement-expense-fields select,.settlement-expense-fields textarea { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #d4ded8; border-radius: 9px; background: #fff; color: #26392f; font: 600 10px 'Manrope'; }
+.settlement-expense-fields textarea { min-height: 72px; padding: 11px 12px; line-height: 1.5; resize: vertical; }
+.settlement-expense-details { grid-column: 1 / -1; }
+.settlement-expense-details > small { margin-left: 4px; color: #8a9690; font-weight: 500; }
+.settlement-expense-category { grid-column: 1 / -1; display: grid; gap: 3px; padding: 12px 13px; border: 1px solid #d8e2dc; border-radius: 9px; background: #f4f8f5; }
+.settlement-expense-category span { color: #74837b; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
+.settlement-expense-category strong { color: #26392f; font-size: 11px; }
+.settlement-expense-category small { color: #74837b; font-size: 8px; }
+.settlement-expense-allocation { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--line); }
+.settlement-expense-allocation span { display: grid; gap: 4px; padding: 11px; color: #74837b; background: #fff; font-size: 8px; }
+.settlement-expense-allocation strong { color: #26392f; font-size: 11px; }
+@media (max-width: 620px) { .settlement-expense-fields { grid-template-columns: 1fr; } .settlement-expense-allocation { grid-column: 1; grid-template-columns: 1fr; } }
+.linked-card-expenses { margin-top: 12px; border-top: 1px solid var(--line); }
+.linked-card-expense-row { display: grid; grid-template-columns: 30px minmax(0,1fr) 130px auto 16px; align-items: center; gap: 11px; padding: 12px 14px; color: inherit; text-decoration: none; border-top: 1px solid #edf1ee; }
+.linked-card-expense-row:hover { background: #f4f8f5; }
+.linked-card-expense-row > span:first-child { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: #2d7458; background: #eaf4ee; }
+.linked-card-expense-row > span { display: grid; gap: 3px; }
+.linked-card-expense-row strong { color: #26392f; font-size: 10px; }
+.linked-card-expense-row small { color: #7a8780; font-size: 8px; }
+@media (max-width: 720px) { .linked-card-expense-row { grid-template-columns: 30px 1fr auto; } .linked-card-expense-row > span:nth-child(3) { display: none; } }
+.apply-deposit-confirm { background: #355f73; box-shadow: 0 5px 12px rgba(53,95,115,.2); }
+.apply-deposit-confirm:hover { background: #294e60; }
 
 @media (max-width: 1100px) {
   .credit-summary { grid-template-columns: 1fr 1fr; }
-  .credit-summary > div:nth-child(2) { border-right: 0; }
-  .credit-summary > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .credit-summary > div { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .credit-summary > div:nth-child(even) { border-right: 0; }
+  .credit-summary > div:last-child { grid-column: 1/-1; border-right: 0; border-bottom: 0; }
 }
 
 @media (max-width: 700px) {
@@ -80,6 +233,8 @@
 @media (max-width: 470px) {
   .credit-summary { grid-template-columns: 1fr; }
   .credit-summary > div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .credit-summary > div:last-child { grid-column: auto; }
+  .credit-summary > div:last-child { border-bottom: 0; }
   .credit-list-filters select, .credit-as-of { width: 100%; }
   .credit-as-of input { flex: 1; width: auto; }
 }

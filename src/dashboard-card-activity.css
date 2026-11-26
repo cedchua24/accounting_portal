@@ -1,0 +1,142 @@
+.activity-icon.card {
+  background: #f3e9f8;
+  color: #75408c;
+}
+
+.activity-icon.cheque {
+  background: #fff3df;
+  color: #a56319;
+}
+
+.non-cash-commitments-panel {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.5fr) minmax(180px, .75fr) minmax(190px, .85fr) minmax(190px, .85fr);
+  gap: 0;
+  margin-bottom: 16px;
+  overflow: hidden;
+  border-color: #e5d8bc;
+  background: linear-gradient(105deg, #fffdf8 0%, #fff 68%);
+}
+
+.non-cash-commitments-copy,
+.non-cash-commitment-total,
+.non-cash-commitment-breakdown,
+.non-cash-commitments-state {
+  min-height: 118px;
+  padding: 18px 20px;
+}
+
+.non-cash-commitments-copy {
+  border-right: 1px solid #eee4d3;
+}
+
+.non-cash-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #98621f;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+}
+
+.non-cash-commitments-copy h2 {
+  margin: 8px 0 4px;
+  font: 700 16px 'Manrope';
+}
+
+.non-cash-commitments-copy p {
+  margin: 0;
+  color: #7d847e;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.non-cash-commitment-total,
+.non-cash-commitment-breakdown {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid #eee4d3;
+}
+
+.non-cash-commitment-total span,
+.non-cash-commitment-breakdown small,
+.non-cash-commitment-breakdown em {
+  color: #7c857f;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.non-cash-commitment-total strong,
+.non-cash-commitment-breakdown strong {
+  display: block;
+  margin: 5px 0 3px;
+  font: 700 18px 'Manrope';
+  color: #352b1e;
+}
+
+.non-cash-commitment-total small {
+  color: #9a6b2e;
+  font-size: 9px;
+}
+
+.non-cash-commitment-breakdown {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.non-cash-commitment-breakdown.card > svg {
+  color: #75408c;
+}
+
+.non-cash-commitment-breakdown.cheque {
+  border-right: 0;
+}
+
+.non-cash-commitment-breakdown.cheque > svg {
+  color: #a56319;
+}
+
+.non-cash-commitment-breakdown:hover {
+  background: rgba(244, 236, 218, .45);
+}
+
+.non-cash-commitments-state {
+  grid-column: span 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #7d847e;
+}
+
+@media (max-width: 1100px) {
+  .non-cash-commitments-panel {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .non-cash-commitments-copy {
+    grid-column: 1 / -1;
+    border-right: 0;
+    border-bottom: 1px solid #eee4d3;
+  }
+}
+
+@media (max-width: 700px) {
+  .non-cash-commitments-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .non-cash-commitments-copy,
+  .non-cash-commitment-total,
+  .non-cash-commitment-breakdown {
+    border-right: 0;
+    border-bottom: 1px solid #eee4d3;
+  }
+}

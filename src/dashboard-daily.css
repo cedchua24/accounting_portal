@@ -58,6 +58,54 @@
   min-height: 230px;
 }
 
+.due-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding: 0 18px 12px;
+}
+
+.due-filter-bar label {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: #6f7d75;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.due-filter-bar select {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  padding: 0 26px 0 9px;
+  color: #34463c;
+  background: #fff;
+  border: 1px solid #dce3dd;
+  border-radius: 8px;
+  outline: 0;
+  font-size: 10px;
+}
+
+.due-filter-bar select:focus {
+  border-color: #5d8b73;
+  box-shadow: 0 0 0 3px rgba(47, 109, 83, 0.08);
+}
+
+.due-filter-bar button {
+  height: 34px;
+  padding: 0 9px;
+  color: #2f6d53;
+  background: #f4f8f5;
+  border: 1px solid #d7e4dc;
+  border-radius: 8px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .daily-scope-badge,
 .activity-count {
   display: inline-flex;
@@ -178,112 +226,6 @@
   font-size: 10px;
 }
 
-.obligations-panel .daily-clear-state {
-  min-height: 82px;
-}
-
-.dashboard-overdue-block {
-  margin: 0 18px 15px;
-  overflow: hidden;
-  background: #fff9f8;
-  border: 1px solid #f0d8d5;
-  border-radius: 10px;
-}
-
-.dashboard-overdue-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
-  color: #98443f;
-  background: #fbedeb;
-}
-
-.dashboard-overdue-head > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.dashboard-overdue-head strong,
-.dashboard-overdue-head b {
-  font-size: 9px;
-}
-
-.dashboard-overdue-head strong {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.dashboard-overdue-head b {
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.dashboard-overdue-list {
-  padding: 0 10px;
-}
-
-.dashboard-overdue-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 1px;
-  border-top: 1px solid #f2dfdc;
-}
-
-.dashboard-overdue-row:first-child {
-  border-top: 0;
-}
-
-.dashboard-overdue-row > span {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.dashboard-overdue-row > span:last-child {
-  text-align: right;
-}
-
-.dashboard-overdue-row strong,
-.dashboard-overdue-row small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dashboard-overdue-row strong {
-  color: #683b37;
-  font-size: 9px;
-}
-
-.dashboard-overdue-row small {
-  color: #a07672;
-  font-size: 8px;
-}
-
-.dashboard-overdue-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 42px;
-  color: #9a6a65;
-  font-size: 9px;
-}
-
-.dashboard-overdue-state.clear {
-  color: #4a7f65;
-  background: #f8fbf9;
-}
-
-.dashboard-overdue-state.error {
-  color: #a43e3e;
-}
-
 .daily-activity-panel {
   overflow: hidden;
   margin-bottom: 16px;
@@ -328,6 +270,15 @@
 
   .daily-movement-grid {
     padding: 6px 14px 16px;
+  }
+
+  .due-filter-bar {
+    grid-template-columns: 1fr;
+    padding-inline: 14px;
+  }
+
+  .due-filter-bar button {
+    width: 100%;
   }
 
   .daily-scope-badge,

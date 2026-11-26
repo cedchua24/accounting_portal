@@ -19,6 +19,7 @@ import './collections.css';
 import './balances.css';
 import './payables.css';
 import './dashboard-daily.css';
+import './dashboard-card-activity.css';
 import { accountingApi, authApi, bakingStoreApi } from './api.js';
 import ExpensesWorkspace from './expenses.jsx';
 import UserAccountsWorkspace from './user-accounts.jsx';
@@ -229,10 +230,35 @@ function Dashboard({ onNavigate }) {
   const [cashFlowError, setCashFlowError] = useState('');
   const [upcomingDuesList, setUpcomingDuesList] = useState(null);
   const [upcomingDuesListError, setUpcomingDuesListError] = useState('');
-  const [overdueDuesList, setOverdueDuesList] = useState(null);
-  const [overdueDuesListError, setOverdueDuesListError] = useState('');
+  const [duePaymentMethodType, setDuePaymentMethodType] = useState('');
+  const [dueInstitutionId, setDueInstitutionId] = useState('');
+  const [dueFilterOptions, setDueFilterOptions] = useState({ paymentMethods: [], institutions: [] });
   const [recentActivity, setRecentActivity] = useState(null);
   const [recentActivityError, setRecentActivityError] = useState('');
+
+  useEffect(() => {
+    let current = true;
+    Promise.allSettled([
+      accountingApi.paymentMethods('?active=1&creates_obligation=1'),
+      accountingApi.financialInstitutions('?type=bank&active=1'),
+    ]).then(([paymentMethodsResult, institutionsResult]) => {
+      if (!current) return;
+      const configuredMethods = paymentMethodsResult.status === 'fulfilled'
+        ? (Array.isArray(paymentMethodsResult.value) ? paymentMethodsResult.value : paymentMethodsResult.value?.data || [])
+        : [];
+      const methodLabels = new Map(configuredMethods.map(method => [method.type, method.name]));
+      const paymentMethods = [
+        { type: 'credit_card', name: methodLabels.get('credit_card') || 'Credit card' },
+        { type: 'cheque', name: methodLabels.get('cheque') || 'Cheque' },
+        { type: 'other', name: 'Other payables' },
+      ];
+      const institutions = institutionsResult.status === 'fulfilled'
+        ? (Array.isArray(institutionsResult.value) ? institutionsResult.value : institutionsResult.value?.data || [])
+        : [];
+      setDueFilterOptions({ paymentMethods, institutions });
+    });
+    return () => { current = false; };
+  }, []);
 
   useEffect(() => {
     let current = true;
@@ -280,7 +306,7 @@ function Dashboard({ onNavigate }) {
     let current = true;
     setUpcomingDues(null);
     setUpcomingDuesError('');
-    accountingApi.dashboardUpcomingDues(dayFrom, dayTo)
+    accountingApi.dashboardUpcomingDues(null, dayTo)
       .then(result => {
         if (current) setUpcomingDues(result);
       })
@@ -308,7 +334,10 @@ function Dashboard({ onNavigate }) {
     let current = true;
     setUpcomingDuesList(null);
     setUpcomingDuesListError('');
-    accountingApi.dashboardUpcomingDuesList(`?day_from=${dayFrom}&day_to=${dayTo}&as_of=${dayTo}&limit=3`)
+    const params = new URLSearchParams({ day_from: '2000-01-01', day_to: dayTo, as_of: dayTo, limit: '5' });
+    if (duePaymentMethodType) params.set('payment_method_type', duePaymentMethodType);
+    if (dueInstitutionId) params.set('financial_institution_id', dueInstitutionId);
+    accountingApi.dashboardUpcomingDuesList(`?${params.toString()}`)
       .then(result => {
         if (current) setUpcomingDuesList(result);
       })
@@ -316,24 +345,7 @@ function Dashboard({ onNavigate }) {
         if (current) setUpcomingDuesListError(error.message || 'Upcoming dues list could not be loaded.');
       });
     return () => { current = false; };
-  }, [dayFrom, dayTo]);
-
-  useEffect(() => {
-    let current = true;
-    const previousDay = new Date(`${dayTo}T00:00:00`);
-    previousDay.setDate(previousDay.getDate() - 1);
-    const previousDayValue = localIsoDate(previousDay);
-    setOverdueDuesList(null);
-    setOverdueDuesListError('');
-    accountingApi.dashboardUpcomingDuesList(`?day_from=2000-01-01&day_to=${previousDayValue}&as_of=${dayTo}&limit=3`)
-      .then(result => {
-        if (current) setOverdueDuesList(result || { data: [], total: 0, total_amount_due: 0 });
-      })
-      .catch(error => {
-        if (current) setOverdueDuesListError(error.message || 'Overdue payments could not be loaded.');
-      });
-    return () => { current = false; };
-  }, [dayTo]);
+  }, [dayFrom, dayTo, duePaymentMethodType, dueInstitutionId]);
 
   useEffect(() => {
     let current = true;
@@ -370,6 +382,13 @@ function Dashboard({ onNavigate }) {
   const totalPayments = payments?.total_payments == null ? Number.NaN : Number(payments.total_payments);
   const paymentsChange = payments?.change_percentage == null ? Number.NaN : Number(payments.change_percentage);
   const hasPayments = Number.isFinite(totalPayments);
+  const nonCashCommitments = payments?.non_cash_commitments_total == null ? Number.NaN : Number(payments.non_cash_commitments_total);
+  const creditCardCharges = payments?.credit_card_charges == null ? Number.NaN : Number(payments.credit_card_charges);
+  const chequesIssued = payments?.cheques_issued == null ? Number.NaN : Number(payments.cheques_issued);
+  const nonCashCommitmentCount = Number(payments?.non_cash_commitment_count || 0);
+  const creditCardChargeCount = Number(payments?.credit_card_charge_count || 0);
+  const chequeIssuedCount = Number(payments?.cheque_issued_count || 0);
+  const hasNonCashCommitments = [nonCashCommitments, creditCardCharges, chequesIssued].every(Number.isFinite);
   const hasPaymentsChange = Number.isFinite(paymentsChange);
   const paymentsChangeClass = paymentsChange > 0 ? 'negative' : paymentsChange < 0 ? 'positive' : '';
   const PaymentsChangeIcon = paymentsChange < 0 ? ArrowDownLeft : ArrowUpRight;
@@ -386,8 +405,7 @@ function Dashboard({ onNavigate }) {
   const periodLabel = isToday ? `Today · ${shortDate(dayTo, true)}` : shortDate(dayTo, true);
   const selectedDayHeading = new Intl.DateTimeFormat('en-PH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${selectedDay}T00:00:00`)).toUpperCase();
   const activityCount = Number(recentActivity?.total ?? recentActivity?.data?.length ?? 0);
-  const overdueCount = Number(overdueDuesList?.total ?? overdueDuesList?.data?.length ?? 0);
-  const overdueAmount = Number(overdueDuesList?.total_amount_due || 0);
+  const hasDueFilters = Boolean(duePaymentMethodType || dueInstitutionId);
 
   return <main className="content">
     <section className="welcome-row">
@@ -399,7 +417,16 @@ function Dashboard({ onNavigate }) {
       <AppLink href={pagePath('cash-balance')} className="metric-card featured" title={cashBalanceError || undefined}><div className="metric-top"><span>Available money</span><div className="metric-icon"><WalletCards size={19}/></div></div><strong>{cashBalanceError ? 'Unavailable' : hasCashBalance ? peso.format(totalCashBalance) : 'Loading…'}</strong><div className="metric-foot">{cashBalanceError ? <span>Could not load balance</span> : cashBalance ? <><span className={changeClass}>{hasChange && <ChangeIcon size={14}/>} {hasChange ? `${Math.abs(changePercentage).toFixed(2)}%` : '—'}</span><span>movement during this day</span></> : <span>As of {shortDate(dayTo, true)}</span>}</div></AppLink>
       <AppLink href={pagePath('collections')} className="metric-card" title={collectionsError || undefined}><div className="metric-top"><span>Collected this day</span><div className="metric-icon pale-green"><ArrowDownLeft size={19}/></div></div><strong>{collectionsError ? 'Unavailable' : hasCollections ? peso.format(totalCollections) : 'Loading…'}</strong><div className="metric-foot">{collectionsError ? <span>Could not load collections</span> : collections ? <><span className={collectionsChangeClass}>{hasCollectionsChange && <CollectionsChangeIcon size={14}/>} {hasCollectionsChange ? `${Math.abs(collectionsChange).toFixed(2)}%` : '—'}</span><span>vs. previous day</span></> : <span>{periodLabel}</span>}</div></AppLink>
       <AppLink href={pagePath('payments')} className="metric-card" title={paymentsError || undefined}><div className="metric-top"><span>Paid this day</span><div className="metric-icon pale-amber"><ArrowUpRight size={19}/></div></div><strong>{paymentsError ? 'Unavailable' : hasPayments ? peso.format(totalPayments) : 'Loading…'}</strong><div className="metric-foot">{paymentsError ? <span>Could not load payments</span> : payments ? <><span className={paymentsChangeClass}>{hasPaymentsChange && <PaymentsChangeIcon size={14}/>} {hasPaymentsChange ? `${Math.abs(paymentsChange).toFixed(2)}%` : '—'}</span><span>vs. previous day</span></> : <span>{periodLabel}</span>}</div></AppLink>
-      <AppLink href={pagePath('payables')} className="metric-card" title={upcomingDuesError || undefined}><div className="metric-top"><span>Due this day</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>due on {shortDate(selectedDay)}</span></> : <span>{periodLabel}</span>}</div></AppLink>
+      <AppLink href={pagePath('payables')} className="metric-card" title={upcomingDuesError || undefined}><div className="metric-top"><span>Unpaid due</span><div className="metric-icon pale-red"><CalendarDays size={19}/></div></div><strong>{upcomingDuesError ? 'Unavailable' : hasUpcomingDues ? peso.format(totalUpcomingDues) : 'Loading…'}</strong><div className="metric-foot">{upcomingDuesError ? <span>Could not load dues</span> : upcomingDues ? <><span className="warning">{hasObligationCount ? `${obligationCount} ${obligationCount === 1 ? 'obligation' : 'obligations'}` : '—'}</span><span>due through {shortDate(selectedDay)}</span></> : <span>{periodLabel}</span>}</div></AppLink>
+    </section>
+
+    <section className="panel non-cash-commitments-panel">
+      <div className="non-cash-commitments-copy"><span className="non-cash-kicker"><ShieldCheck size={14}/>Not included in paid cash</span><h2>Non-cash commitments</h2><p>Credit-card charges and cheques issued on {shortDate(selectedDay, true)}. They count as paid only when the card or cheque is settled.</p></div>
+      {paymentsError ? <div className="non-cash-commitments-state">Unavailable</div> : !payments || !hasNonCashCommitments ? <div className="non-cash-commitments-state"><RefreshCw className="spin" size={18}/>Loading…</div> : <>
+        <div className="non-cash-commitment-total"><span>Committed this day</span><strong>{peso.format(nonCashCommitments)}</strong><small>{nonCashCommitmentCount} {nonCashCommitmentCount === 1 ? 'commitment' : 'commitments'}</small></div>
+        <AppLink href={pagePath('payments')} className="non-cash-commitment-breakdown card"><CreditCard size={19}/><span><small>Credit-card charges</small><strong>{peso.format(creditCardCharges)}</strong><em>{creditCardChargeCount} {creditCardChargeCount === 1 ? 'charge' : 'charges'}</em></span></AppLink>
+        <AppLink href={pagePath('cheques', null, { view: 'due' })} className="non-cash-commitment-breakdown cheque"><Banknote size={19}/><span><small>Cheques issued</small><strong>{peso.format(chequesIssued)}</strong><em>{chequeIssuedCount} {chequeIssuedCount === 1 ? 'cheque' : 'cheques'}</em></span></AppLink>
+      </>}
     </section>
 
     <section className="dashboard-grid">
@@ -408,19 +435,20 @@ function Dashboard({ onNavigate }) {
         {cashFlowError ? <div className="cashflow-state error-state"><CircleHelp size={19}/><span>{cashFlowError}</span></div> : !cashFlow || !hasCashFlow ? <div className="cashflow-state"><RefreshCw className="spin" size={19}/><span>Loading daily movement…</span></div> : <div className="daily-movement-grid"><article className="in"><span><ArrowDownLeft size={16}/>Money in</span><strong>{peso.format(cashFlowMoneyIn)}</strong><small>Funds received on this day</small></article><article className="out"><span><ArrowUpRight size={16}/>Money out</span><strong>{peso.format(cashFlowMoneyOut)}</strong><small>Funds released on this day</small></article><article className={cashFlowNet < 0 ? 'net negative' : 'net'}><span><ArrowLeftRight size={16}/>Net movement</span><strong>{cashFlowNet > 0 ? '+' : ''}{peso.format(cashFlowNet)}</strong><small>{cashFlowNet > 0 ? 'More money entered than left' : cashFlowNet < 0 ? 'More money left than entered' : 'Inflows and outflows are balanced'}</small></article></div>}
       </article>
       <article className="panel obligations-panel">
-        <div className="panel-head"><div><h2>Due this day</h2><p>Unpaid obligations dated {shortDate(selectedDay, true)}</p></div><AppLink href={pagePath('payables')} className="link-button">Open payables</AppLink></div>
-        {upcomingDuesListError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{upcomingDuesListError}</span></div> : !upcomingDuesList ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading daily dues…</span></div> : upcomingDuesList.data?.length === 0 ? <div className="dashboard-panel-state daily-clear-state"><CheckCircle2 size={22}/><strong>No payments due</strong><span>Nothing is scheduled for this date.</span></div> : <div className="due-list">{(upcomingDuesList.data || []).map(item => {
+        <div className="panel-head"><div><h2>Payments due</h2><p>All unpaid obligations due on or before {shortDate(selectedDay, true)}</p></div><AppLink href={pagePath('payables')} className="link-button">Open payables</AppLink></div>
+        <div className="due-filter-bar">
+          <label><span>Payment method</span><select value={duePaymentMethodType} onChange={event => setDuePaymentMethodType(event.target.value)}><option value="">All payment methods</option>{dueFilterOptions.paymentMethods.map(method => <option key={method.type} value={method.type}>{method.name}</option>)}</select></label>
+          <label><span>Bank</span><select value={dueInstitutionId} onChange={event => setDueInstitutionId(event.target.value)}><option value="">All banks</option>{dueFilterOptions.institutions.map(institution => <option key={institution.id} value={institution.id}>{institution.name}</option>)}</select></label>
+          {hasDueFilters && <button type="button" onClick={() => { setDuePaymentMethodType(''); setDueInstitutionId(''); }}>Clear</button>}
+        </div>
+        {upcomingDuesListError ? <div className="dashboard-panel-state error-state"><CircleHelp size={19}/><span>{upcomingDuesListError}</span></div> : !upcomingDuesList ? <div className="dashboard-panel-state"><RefreshCw className="spin" size={19}/><span>Loading unpaid dues…</span></div> : upcomingDuesList.data?.length === 0 ? <div className="dashboard-panel-state daily-clear-state"><CheckCircle2 size={22}/><strong>No unpaid payments due</strong><span>There are no current or overdue obligations.</span></div> : <div className="due-list">{(upcomingDuesList.data || []).map(item => {
           const urgent = item.is_overdue || Number(item.days_until_due) <= 3;
           return <div className="due-row" key={item.id}>
             <div className={`due-date ${urgent ? 'urgent' : ''}`}><strong>{item.due_day || item.due?.split(' ')[1]}</strong><span>{item.due_month || item.due?.split(' ')[0]}</span></div>
-            <div className="due-info"><strong>{item.vendor || 'Obligation'}</strong><span>{item.ref || item.number || humanize(item.type)}</span></div>
+            <div className="due-info"><strong>{item.vendor || 'Obligation'}</strong><span>{[item.ref || item.number || humanize(item.type), item.financial_institution].filter(Boolean).join(' · ')}</span></div>
             <div className="due-amount"><strong>{money(item.amount_due ?? item.amount, item.currency || 'PHP')}</strong><span className={urgent ? 'red' : ''}>{item.urgency || (item.is_overdue ? 'Overdue' : item.due)}</span></div>
           </div>;
         })}</div>}
-        <div className="dashboard-overdue-block">
-          <div className="dashboard-overdue-head"><span><CalendarDays size={14}/><strong>Overdue payments</strong></span>{overdueDuesList && <b>{overdueCount} unpaid · {peso.format(overdueAmount)}</b>}</div>
-          {overdueDuesListError ? <div className="dashboard-overdue-state error"><CircleHelp size={14}/><span>{overdueDuesListError}</span></div> : !overdueDuesList ? <div className="dashboard-overdue-state"><RefreshCw className="spin" size={14}/><span>Checking overdue payments…</span></div> : !Array.isArray(overdueDuesList.data) || overdueDuesList.data.length === 0 ? <div className="dashboard-overdue-state clear"><Check size={14}/><span>No overdue payments</span></div> : <div className="dashboard-overdue-list">{overdueDuesList.data.slice(0, 3).map(item => <div className="dashboard-overdue-row" key={`overdue-${item.id}`}><span><strong>{item.vendor || 'Obligation'}</strong><small>{item.ref || item.number || humanize(item.type || 'obligation')}</small></span><span><strong>{money(item.amount_due ?? item.amount ?? 0, item.currency || 'PHP')}</strong><small>{item.due_date ? `Due ${shortDate(item.due_date)}` : 'Past due'}</small></span></div>)}</div>}
-        </div>
       </article>
     </section>
 
@@ -431,7 +459,7 @@ function Dashboard({ onNavigate }) {
           const isInflow = item.type === 'in';
           const displayAmount = item.type === 'out' ? -Math.abs(amount) : amount;
           return <div className="activity-row" key={item.id}>
-            <div className={`activity-icon ${item.type}`}>{isInflow ? <ArrowDownLeft size={17}/> : item.type === 'out' ? <ArrowUpRight size={17}/> : <ArrowLeftRight size={17}/>}</div>
+            <div className={`activity-icon ${item.type}`}>{isInflow ? <ArrowDownLeft size={17}/> : item.type === 'out' ? <ArrowUpRight size={17}/> : item.type === 'card' ? <CreditCard size={17}/> : item.type === 'cheque' ? <Banknote size={17}/> : <ArrowLeftRight size={17}/>}</div>
             <div className="activity-info"><strong>{item.title || 'Account activity'}</strong><span>{item.meta || item.account || '—'}</span></div>
             <div className="activity-amount"><strong className={isInflow && amount > 0 ? 'green' : ''}>{isInflow && amount > 0 ? '+' : ''}{money(displayAmount, item.currency || 'PHP')}</strong><span>{item.time || calendarDate(item.activity_date)}</span></div>
           </div>;
